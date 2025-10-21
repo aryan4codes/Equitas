@@ -13,9 +13,9 @@ def run_guardian():
     import uvicorn
     from guardian.main import app
     
-    print("🚀 Starting equitas Guardian Backend...")
-    print("📡 API will be available at http://localhost:8000")
-    print("📚 API docs at http://localhost:8000/docs")
+    print(" Starting equitas Guardian Backend...")
+    print(" API will be available at http://localhost:8000")
+    print(" API docs at http://localhost:8000/docs")
     print("\nPress CTRL+C to stop\n")
     
     uvicorn.run(

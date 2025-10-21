@@ -13,7 +13,7 @@ from .models import SafeCompletionResponse, SafetyConfig, SafetyScores
 from .exceptions import SafetyViolationException, RemediationFailedException
 
 
-class equitas:
+class Equitas:
     """
     equitas SDK client that enhances OpenAI API calls with safety checks.
     

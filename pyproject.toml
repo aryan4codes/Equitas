@@ -1,6 +1,6 @@
 [project]
 name = "equitas"
-version = "0.1.0"
+version = "0.1.1"
 description = "Equitas: AI Safety & Observability Platform - SDK and Guardian Backend"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -57,10 +57,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/aryan4codes/FairSight"
-Documentation = "https://github.com/aryan4codes/FairSight#readme"
-Repository = "https://github.com/aryan4codes/FairSight"
-Issues = "https://github.com/aryan4codes/FairSight/issues"
+Homepage = "https://github.com/aryan4codes/Equitas"
+Documentation = "https://github.com/aryan4codes/Equitas#readme"
+Repository = "https://github.com/aryan4codes/Equitas"
+Issues = "https://github.com/aryan4codes/Equitas/issues"
 
 [project.optional-dependencies]
 dev = [

@@ -55,7 +55,7 @@ Create `.env` file:
 OPENAI_API_KEY=sk-your-key-here
 
 # Database
-DATABASE_URL=sqlite+aiosqlite:///./equitas.db
+DATABASE_URL=sqlite+aiosqlite:///.equitas.db
 
 # Security
 SECRET_KEY=your-secret-key-change-in-production
@@ -336,7 +336,7 @@ For detailed documentation, see:
 ## Support
 
 For issues or questions:
-- GitHub Issues: [github.com/aryan4codes/FairSight/issues](https://github.com/aryan4codes/FairSight/issues)
+- GitHub Issues: [github.com/aryan4codes/Equitas/issues](https://github.com/aryan4codes/Equitas/issues)
 - Email: av.rajpurkar@gmail.com
 
 ---
