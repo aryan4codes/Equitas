@@ -26,7 +26,6 @@ jobs:
     
     - name: Build package
       run: |
-        cd backend
         python -m build
     
     - name: Publish to PyPI
