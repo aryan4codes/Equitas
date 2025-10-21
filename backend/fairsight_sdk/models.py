@@ -1,5 +1,5 @@
 """
-Data models for FairSight SDK.
+Data models for equitas SDK.
 """
 
 from typing import Any, Dict, List, Literal, Optional
@@ -63,7 +63,7 @@ class SafeCompletionResponse(BaseModel):
     choices: List[Any]
     usage: Optional[Any] = None
     
-    # FairSight safety fields
+    # equitas safety fields
     safety_scores: SafetyScores
     explanation: Optional[str] = Field(
         default=None,
@@ -71,7 +71,7 @@ class SafeCompletionResponse(BaseModel):
     )
     latency_ms: float = Field(
         default=0.0,
-        description="Total latency including FairSight processing"
+        description="Total latency including equitas processing"
     )
     
     class Config:

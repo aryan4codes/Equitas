@@ -10,6 +10,7 @@ from fastapi import Header, HTTPException, status
 VALID_API_KEYS = {
     "fs-dev-key-123": "tenant_demo",
     "fs-prod-key-456": "tenant_prod",
+    "fs-test-key-789": "tenant_test_aggressive",
 }
 
 

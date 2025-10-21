@@ -1,5 +1,5 @@
 """
-FairSight - AI Safety & Observability Platform
+equitas - AI Safety & Observability Platform
 
 Entry point for running the Guardian backend or SDK examples.
 """
@@ -13,7 +13,7 @@ def run_guardian():
     import uvicorn
     from guardian.main import app
     
-    print("🚀 Starting FairSight Guardian Backend...")
+    print("🚀 Starting equitas Guardian Backend...")
     print("📡 API will be available at http://localhost:8000")
     print("📚 API docs at http://localhost:8000/docs")
     print("\nPress CTRL+C to stop\n")
@@ -37,14 +37,14 @@ def run_examples():
     
     from basic_usage import main as basic_main
     
-    print("🎯 Running FairSight SDK Examples...")
+    print("🎯 Running equitas SDK Examples...")
     print("=" * 60)
     asyncio.run(basic_main())
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="FairSight - AI Safety Platform")
+    parser = argparse.ArgumentParser(description="equitas - AI Safety Platform")
     parser.add_argument(
         "command",
         choices=["guardian", "examples", "help"],
@@ -60,7 +60,7 @@ def main():
     elif args.command == "examples":
         run_examples()
     else:
-        print("FairSight - AI Safety & Observability Platform")
+        print("equitas - AI Safety & Observability Platform")
         print("\nUsage:")
         print("  python main.py guardian   - Start Guardian backend")
         print("  python main.py examples   - Run SDK examples")

@@ -1,7 +1,7 @@
 """
 Custom classifier system - Pluggable safety detectors.
 
-This allows FairSight to go beyond OpenAI Moderation API with custom,
+This allows equitas to go beyond OpenAI Moderation API with custom,
 domain-specific safety classifiers.
 """
 

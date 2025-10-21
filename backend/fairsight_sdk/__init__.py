@@ -1,5 +1,5 @@
 """
-FairSight SDK - Client library for safety-enhanced OpenAI API calls.
+equitas SDK - Client library for safety-enhanced OpenAI API calls.
 
 This SDK wraps OpenAI's API to provide:
 - Automatic safety checks (toxicity, bias, jailbreaks)
@@ -8,10 +8,10 @@ This SDK wraps OpenAI's API to provide:
 - Multi-tenant support
 """
 
-from .client import FairSight
+from .client import equitas
 from .models import SafeCompletionResponse, SafetyConfig, SafetyScores
 from .exceptions import (
-    FairSightException,
+    equitasException,
     SafetyViolationException,
     RemediationFailedException,
 )
@@ -19,11 +19,11 @@ from .exceptions import (
 __version__ = "0.1.0"
 
 __all__ = [
-    "FairSight",
+    "equitas",
     "SafeCompletionResponse",
     "SafetyConfig",
     "SafetyScores",
-    "FairSightException",
+    "equitasException",
     "SafetyViolationException",
     "RemediationFailedException",
 ]

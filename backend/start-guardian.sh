@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Start FairSight Guardian Backend
+# Start equitas Guardian Backend
 
-echo "🚀 Starting FairSight Guardian Backend..."
+echo "🚀 Starting equitas Guardian Backend..."
 
 # Check if virtual environment exists
 if [ ! -d ".venv" ]; then

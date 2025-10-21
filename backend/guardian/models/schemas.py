@@ -91,7 +91,7 @@ class LogRequest(BaseModel):
     original_response: Optional[str] = None
     safety_scores: Dict[str, Any]
     latency_ms: float
-    fairsight_overhead_ms: float
+    equitas_overhead_ms: float
     tokens_input: int
     tokens_output: int
     timestamp: float

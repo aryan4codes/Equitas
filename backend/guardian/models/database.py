@@ -1,5 +1,5 @@
 """
-Database models for FairSight Guardian.
+Database models for equitas Guardian.
 """
 
 from datetime import datetime
@@ -35,7 +35,7 @@ class APILog(Base):
     
     # Metrics
     latency_ms = Column(Float, default=0.0)
-    fairsight_overhead_ms = Column(Float, default=0.0)
+    equitas_overhead_ms = Column(Float, default=0.0)
     tokens_input = Column(Integer, default=0)
     tokens_output = Column(Integer, default=0)
     safety_units_used = Column(Float, default=0.0)

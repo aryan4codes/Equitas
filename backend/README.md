@@ -1,24 +1,22 @@
-# FairSight: AI Safety & Observability Platform
+# Equitas: AI Safety & Observability Platform
 
 A hybrid SDK and backend platform that enhances OpenAI API usage with real-time safety, bias, and compliance checks.
 
-## 🎯 Overview
+## Overview
 
-FairSight provides:
+Equitas provides:
 - **Client SDK**: Drop-in replacement for OpenAI API with safety enhancements
 - **Guardian Backend**: Microservices for toxicity, bias, and jailbreak detection
 - **Real-time Dashboard**: Observability UI for metrics and incidents
 - **Multi-tenant**: Enterprise-grade data isolation and RBAC
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐
 │  Your App       │
-│  + FairSight SDK│
+│  + Equitas SDK  │
 └────────┬────────┘
-         │
-         ├──────────────► OpenAI API
          │
          └──────────────► Guardian Backend
                           ├── Toxicity Detector
@@ -36,7 +34,7 @@ FairSight provides:
                      Dashboard UI
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install Dependencies
 
@@ -57,7 +55,7 @@ Create `.env` file:
 OPENAI_API_KEY=sk-your-key-here
 
 # Database
-DATABASE_URL=sqlite+aiosqlite:///./fairsight.db
+DATABASE_URL=sqlite+aiosqlite:///./equitas.db
 
 # Security
 SECRET_KEY=your-secret-key-change-in-production
@@ -72,20 +70,20 @@ python -m guardian.main
 
 Backend will be available at `http://localhost:8000`
 
-### 4. Use FairSight SDK
+### 4. Use Equitas SDK
 
 ```python
 from fairsight_sdk import FairSight, SafetyConfig
 
 # Initialize client
-fairsight = FairSight(
+client = FairSight(
     openai_api_key="sk-...",
     fairsight_api_key="fs-dev-key-123",
     tenant_id="your-org",
 )
 
 # Make safe API calls
-response = fairsight.chat.completions.create(
+response = client.chat.completions.create(
     model="gpt-4",
     messages=[{"role": "user", "content": "Hello!"}],
     safety_config=SafetyConfig(on_flag="auto-correct")
@@ -96,7 +94,7 @@ print(f"Toxicity: {response.safety_scores.toxicity_score}")
 print(f"Categories: {response.safety_scores.toxicity_categories}")
 ```
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 backend/
@@ -131,7 +129,7 @@ backend/
     └── test_guardian_api.py  # API testing
 ```
 
-## 🔒 Safety Features
+## Safety Features
 
 ### Toxicity Detection
 - Uses OpenAI Moderation API
@@ -158,7 +156,7 @@ backend/
 - Removes toxic language while preserving intent
 - Neutralizes biased content
 
-## 📊 API Endpoints
+## API Endpoints
 
 ### Analysis Endpoints
 
@@ -226,7 +224,7 @@ Get aggregated metrics (usage, safety scores, incidents).
 #### GET `/v1/incidents`
 Query flagged incidents with filters.
 
-## 🔑 Authentication
+## Authentication
 
 All endpoints require:
 - **Authorization Header**: `Bearer <api-key>`
@@ -236,9 +234,9 @@ Default API keys (for development):
 - `fs-dev-key-123` → `tenant_demo`
 - `fs-prod-key-456` → `tenant_prod`
 
-## 📈 Metrics & Observability
+## Metrics & Observability
 
-FairSight logs comprehensive metrics per API call:
+Equitas logs comprehensive metrics per API call:
 
 - **Safety Scores**: Toxicity, bias, jailbreak flags
 - **Performance**: Latency, overhead, token counts
@@ -247,7 +245,7 @@ FairSight logs comprehensive metrics per API call:
 
 All data is isolated per tenant with encryption at rest.
 
-## 🎛️ Configuration
+## Configuration
 
 ### Safety Config (SDK)
 
@@ -269,7 +267,7 @@ Stored in database per tenant:
 - Privacy settings (anonymization, retention)
 - Credit limits (Safety Units)
 
-## 🧪 Testing
+## Testing
 
 Run example scripts:
 
@@ -281,7 +279,7 @@ python examples/basic_usage.py
 python examples/test_guardian_api.py
 ```
 
-## 📝 Development
+## Development
 
 ### Running locally
 
@@ -303,16 +301,16 @@ alembic revision --autogenerate -m "Description"
 alembic upgrade head
 ```
 
-## 🚢 Deployment
+## Deployment
 
 ### Docker
 
 ```bash
 # Build
-docker build -t fairsight-guardian .
+docker build -t equitas-guardian .
 
 # Run
-docker run -p 8000:8000 --env-file .env fairsight-guardian
+docker run -p 8000:8000 --env-file .env equitas-guardian
 ```
 
 ### Kubernetes
@@ -321,26 +319,26 @@ docker run -p 8000:8000 --env-file .env fairsight-guardian
 kubectl apply -f k8s/deployment.yaml
 ```
 
-## 📜 License
+## License
 
 MIT License - see LICENSE file
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Please see CONTRIBUTING.md
 
-## 📚 Documentation
+## Documentation
 
 For detailed documentation, see:
 - [PRD.md](PRD.md) - Product Requirements Document
 - [API Documentation](http://localhost:8000/docs) - Swagger UI (when running)
 
-## 🆘 Support
+## Support
 
 For issues or questions:
-- GitHub Issues: [github.com/yourorg/fairsight/issues]
-- Email: support@fairsight.ai
+- GitHub Issues: [github.com/aryan4codes/FairSight/issues](https://github.com/aryan4codes/FairSight/issues)
+- Email: av.rajpurkar@gmail.com
 
 ---
 
-Built with ❤️ for AI Safety
+Built for AI Safety

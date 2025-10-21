@@ -93,7 +93,7 @@ async def log_api_call(
         jailbreak_flag=request.safety_scores.get("jailbreak_flag", False),
         response_modification=request.safety_scores.get("response_modification", "none"),
         latency_ms=request.latency_ms,
-        fairsight_overhead_ms=request.fairsight_overhead_ms,
+        equitas_overhead_ms=request.equitas_overhead_ms,
         tokens_input=request.tokens_input,
         tokens_output=request.tokens_output,
         safety_units_used=safety_units,

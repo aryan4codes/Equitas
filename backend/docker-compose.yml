@@ -7,7 +7,7 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=postgresql+asyncpg://fairsight:fairsight@postgres:5432/fairsight
+      - DATABASE_URL=postgresql+asyncpg://equitas:equitas@postgres:5432/equitas
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
     depends_on:
       - postgres
@@ -19,9 +19,9 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=fairsight
-      - POSTGRES_PASSWORD=fairsight
-      - POSTGRES_DB=fairsight
+      - POSTGRES_USER=equitas
+      - POSTGRES_PASSWORD=equitas
+      - POSTGRES_DB=equitas
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

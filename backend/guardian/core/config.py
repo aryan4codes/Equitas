@@ -10,11 +10,11 @@ class Settings(BaseSettings):
     """Application settings."""
     
     # API Settings
-    api_title: str = "FairSight Guardian API"
+    api_title: str = "equitas Guardian API"
     api_version: str = "0.1.0"
     
     # Database
-    database_url: str = "sqlite+aiosqlite:///./fairsight.db"
+    database_url: str = "sqlite+aiosqlite:///./equitas.db"
     
     # OpenAI
     openai_api_key: str = ""

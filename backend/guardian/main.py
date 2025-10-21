@@ -1,5 +1,5 @@
 """
-Guardian Backend - FastAPI application for FairSight safety analysis.
+Guardian Backend - FastAPI application for equitas safety analysis.
 """
 
 from contextlib import asynccontextmanager
@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="FairSight Guardian API",
+    title="equitas Guardian API",
     description="Backend API for AI Safety & Observability",
     version="0.1.0",
     lifespan=lifespan,
@@ -47,7 +47,7 @@ app.add_middleware(
 async def root():
     """Root endpoint."""
     return {
-        "service": "FairSight Guardian API",
+        "service": "equitas Guardian API",
         "version": "0.1.0",
         "status": "operational",
     }

@@ -13,7 +13,7 @@ ENV PATH="/root/.cargo/bin:$PATH"
 
 # Copy project files
 COPY pyproject.toml ./
-COPY fairsight_sdk ./fairsight_sdk
+COPY equitas_sdk ./equitas_sdk
 COPY guardian ./guardian
 COPY examples ./examples
 COPY main.py ./
@@ -28,7 +28,7 @@ RUN mkdir -p /app/data
 EXPOSE 8000
 
 # Environment variables
-ENV DATABASE_URL=sqlite+aiosqlite:///./data/fairsight.db
+ENV DATABASE_URL=sqlite+aiosqlite:///./data/equitas.db
 ENV PYTHONUNBUFFERED=1
 
 # Health check

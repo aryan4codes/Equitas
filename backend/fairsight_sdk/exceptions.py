@@ -1,23 +1,23 @@
 """
-Custom exceptions for FairSight SDK.
+Custom exceptions for equitas SDK.
 """
 
 
-class FairSightException(Exception):
-    """Base exception for FairSight SDK."""
+class equitasException(Exception):
+    """Base exception for equitas SDK."""
     pass
 
 
-class SafetyViolationException(FairSightException):
+class SafetyViolationException(equitasException):
     """Raised when safety violation is detected and on_flag='strict'."""
     pass
 
 
-class RemediationFailedException(FairSightException):
+class RemediationFailedException(equitasException):
     """Raised when automatic remediation fails."""
     pass
 
 
-class GuardianAPIException(FairSightException):
+class GuardianAPIException(equitasException):
     """Raised when Guardian backend API call fails."""
     pass

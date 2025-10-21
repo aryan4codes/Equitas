@@ -8,3 +8,65 @@ wheels/
 
 # Virtual environments
 .venv
+
+# env files 
+.env
+.env.*
+
+# Development/IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Documentation
+docs/_build/
+site/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Environments beyond .venv
+env/
+venv/
+ENV/
+
+# Package distribution
+*.manifest
+*.spec
+
+# Logs
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Translations
+*.mo
+*.pot
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+
+*.pypirc
+
+*.db
