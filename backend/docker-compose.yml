@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  guardian:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://fairsight:fairsight@postgres:5432/fairsight
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=fairsight
+      - POSTGRES_PASSWORD=fairsight
+      - POSTGRES_DB=fairsight
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - guardian
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
