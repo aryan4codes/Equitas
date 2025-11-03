@@ -1,6 +1,6 @@
 [project]
 name = "equitas"
-version = "2.0.2"
+version = "2.0.3"
 description = "Equitas: AI Safety & Observability Platform"
 readme = "README.md"
 requires-python = ">=3.11"
