@@ -62,7 +62,7 @@ async def get_incidents(
     items = []
     for inc in incidents:
         items.append(
-            IncidentResponse(
+        IncidentResponse(
                 id=str(inc["_id"]),  # Use MongoDB ObjectId as string
                 tenant_id=inc["tenant_id"],
                 user_id=inc["user_id"],
