@@ -1,6 +1,6 @@
 # Equitas Technical Roadmap: Enhanced AI Safety Platform
 
-**Version:** 2.0.0  
+**Version:** 2.0.1  
 **Last Updated:** 2025  
 **Status:** Implementation In Progress
 

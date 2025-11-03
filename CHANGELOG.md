@@ -1,6 +1,15 @@
-# Equitas 2.0 Release Notes
+# Equitas Changelog
 
-## Major Changes
+## Version 2.0.1 (2025-01-XX)
+
+### Fixes
+- Fixed PyPI upload conflict by bumping version
+- Updated project structure (renamed guardian to backend_api)
+- Removed all emojis from codebase per professional standards
+
+## Version 2.0.0 (2025-01-XX)
+
+### Major Changes
 
 ### New Features
 

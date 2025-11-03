@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Equitas API",
     description="Backend API for AI Safety & Observability",
-    version="2.0.0",
+    version="2.0.1",
     lifespan=lifespan,
 )
 
@@ -48,7 +48,7 @@ async def root():
     """Root endpoint."""
     return {
         "service": "Equitas API",
-        "version": "2.0.0",
+        "version": "2.0.1",
         "status": "operational",
     }
 
