@@ -161,9 +161,43 @@ class TenantConfig(Base):
     retention_days = Column(Integer, default=90)
     
     # Credits
+    credit_balance = Column(Float, default=0.0, nullable=False)  # Current credit balance
     safety_units_limit = Column(Float, default=10000.0)
     safety_units_used = Column(Float, default=0.0)
+    credit_enabled = Column(Boolean, default=True)  # Whether credit checking is enabled
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class CreditTransaction(Base):
+    """Transaction history for credit operations."""
+    
+    __tablename__ = "credit_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String(100), nullable=False, index=True)
+    
+    # Transaction details
+    transaction_type = Column(String(50), nullable=False, index=True)  # add, deduct, refund, expire
+    amount = Column(Float, nullable=False)  # Positive for add/refund, negative for deduct/expire
+    balance_before = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    
+    # Reference
+    reference_type = Column(String(50), nullable=True)  # api_call, manual, subscription, etc.
+    reference_id = Column(String(100), nullable=True)  # ID of related entity (log_id, etc.)
+    
+    # Metadata
+    description = Column(Text, nullable=True)
+    metadata = Column(JSON, default=dict)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_by = Column(String(100), nullable=True)  # Admin user who made the transaction
+    
+    __table_args__ = (
+        Index('ix_tenant_created', 'tenant_id', 'created_at'),
+        Index('ix_tenant_type', 'tenant_id', 'transaction_type'),
+    )

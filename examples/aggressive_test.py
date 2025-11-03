@@ -231,7 +231,7 @@ async def main():
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         equitas_api_key=os.getenv("equitas_API_KEY", "fs-dev-key-123"),
         tenant_id="tenant_demo",  # Must match the API key's tenant
-        guardian_base_url="http://localhost:8000",
+        backend_api_url="http://localhost:8000",
         user_id="test_user_aggressive",
     )
     

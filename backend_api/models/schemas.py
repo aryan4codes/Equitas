@@ -51,6 +51,23 @@ class JailbreakResponse(BaseModel):
     patterns_detected: List[str] = Field(default_factory=list)
 
 
+class HallucinationRequest(BaseModel):
+    """Request for hallucination detection."""
+    prompt: str = Field(..., description="Original prompt")
+    response: str = Field(..., description="LLM response to check")
+    tenant_id: str = Field(..., description="Tenant identifier")
+    context: Optional[List[str]] = Field(default=None, description="Optional context/knowledge base for fact-checking")
+
+
+class HallucinationResponse(BaseModel):
+    """Response from hallucination detection."""
+    hallucination_score: float = Field(..., ge=0.0, le=1.0)
+    flagged: bool
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    recommendation: str = Field(..., description="Risk level: safe, low_risk, medium_risk, high_risk")
+    components: Optional[Dict[str, Any]] = Field(default=None, description="Component scores")
+
+
 class ExplainRequest(BaseModel):
     """Request for explanation."""
     text: str
@@ -168,5 +185,59 @@ class IncidentListResponse(BaseModel):
     """List of incidents with pagination."""
     total: int
     items: List[IncidentResponse]
+    limit: int
+    offset: int
+
+
+# Credits
+
+class CreditBalanceResponse(BaseModel):
+    """Credit balance information."""
+    tenant_id: str
+    credit_balance: float = Field(..., ge=0.0)
+    credit_enabled: bool
+    safety_units_limit: float
+    safety_units_used: float
+    available_credits: float = Field(..., ge=0.0)
+
+
+class CreditAddRequest(BaseModel):
+    """Request to add credits."""
+    amount: float = Field(..., gt=0, description="Amount of credits to add")
+    reference_type: Optional[str] = Field(default="manual", description="Type: manual, subscription, promotion")
+    reference_id: Optional[str] = Field(default=None, description="ID of related entity")
+    description: Optional[str] = Field(default=None, description="Transaction description")
+    created_by: Optional[str] = Field(default=None, description="User/admin who added credits")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+
+
+class CreditAddResponse(BaseModel):
+    """Response from adding credits."""
+    success: bool
+    credit_balance: float
+    amount_added: float
+    transaction_id: Optional[int]
+    balance_before: float
+    balance_after: float
+
+
+class CreditTransactionItem(BaseModel):
+    """Single credit transaction."""
+    id: int
+    transaction_type: str
+    amount: float
+    balance_before: float
+    balance_after: float
+    reference_type: Optional[str]
+    reference_id: Optional[str]
+    description: Optional[str]
+    created_at: str
+    created_by: Optional[str]
+
+
+class CreditTransactionResponse(BaseModel):
+    """Transaction history response."""
+    transactions: List[CreditTransactionItem]
+    total: int
     limit: int
     offset: int

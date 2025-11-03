@@ -1,0 +1,46 @@
+# Pre-commit hook configuration
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-case-conflict
+
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: ['--line-length=100']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.6
+    hooks:
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+
+  - repo: local
+    hooks:
+      - id: no-emojis
+        name: Check for emojis
+        entry: bash -c 'if grep -r "[🚀🔒💰📊🏢🔧🛡️🎯📦📚💳🧪🚢📖🤝📄📞😀-🙏🌀-🗿]" --include="*.py" --include="*.md" --include="*.txt" --include="*.yml" --include="*.yaml" .; then echo "Error: Emojis found in codebase. Remove all emojis."; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-professional-language
+        name: Check for unprofessional language
+        entry: bash -c 'if grep -riE "(lol|omg|wtf|damn|sucks|crappy)" --include="*.py" --include="*.md" .; then echo "Error: Unprofessional language found. Use formal language."; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+

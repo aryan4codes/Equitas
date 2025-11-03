@@ -1,5 +1,5 @@
 """
-Guardian Backend - FastAPI application for equitas safety analysis.
+Equitas Backend API - FastAPI application for AI safety analysis.
 """
 
 from contextlib import asynccontextmanager
@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
-from .api.v1 import analysis, logging, metrics, incidents
+from .api.v1 import analysis, logging, metrics, incidents, credits
 from .core.config import get_settings
 from .core.database import engine, Base
 from .core.auth import verify_api_key
@@ -27,9 +27,9 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="equitas Guardian API",
+    title="Equitas API",
     description="Backend API for AI Safety & Observability",
-    version="0.1.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -47,8 +47,8 @@ app.add_middleware(
 async def root():
     """Root endpoint."""
     return {
-        "service": "equitas Guardian API",
-        "version": "0.1.0",
+        "service": "Equitas API",
+        "version": "2.0.0",
         "status": "operational",
     }
 
@@ -88,10 +88,17 @@ app.include_router(
     dependencies=[Depends(verify_api_key)],
 )
 
+app.include_router(
+    credits.router,
+    prefix="/v1/credits",
+    tags=["credits"],
+    dependencies=[Depends(verify_api_key)],
+)
+
 
 if __name__ == "__main__":
     uvicorn.run(
-        "guardian.main:app",
+        "backend_api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,

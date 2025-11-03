@@ -1,14 +1,55 @@
 # Equitas: AI Safety & Observability Platform
 
-A hybrid SDK and backend platform that enhances OpenAI API usage with real-time safety, bias, and compliance checks.
+**Enterprise-grade AI safety wrapper for LLM applications**
 
-## Overview
+Equitas is a comprehensive AI safety platform that wraps around OpenAI (and other LLM) APIs to provide real-time toxicity detection, bias checking, hallucination detection, jailbreak prevention, and compliance monitoring. Built for enterprises who need to ensure their AI applications are safe, unbiased, and compliant.
 
-Equitas provides:
-- **Client SDK**: Drop-in replacement for OpenAI API with safety enhancements
-- **Guardian Backend**: Microservices for toxicity, bias, and jailbreak detection
-- **Real-time Dashboard**: Observability UI for metrics and incidents
-- **Multi-tenant**: Enterprise-grade data isolation and RBAC
+## Key Features
+
+- **Multi-Layer Safety Detection** - Toxicity, bias, hallucination, and jailbreak detection
+- **Custom ML Models** - No vendor lock-in, uses open-source transformer models
+- **Credit-Based System** - Flexible usage-based billing and credit management
+- **Real-Time Analytics** - Comprehensive dashboard with metrics and incident tracking
+- **Enterprise Ready** - Multi-tenant architecture with data isolation
+- **Easy Integration** - Drop-in replacement for OpenAI API
+
+## Quick Start
+
+### Installation
+
+```bash
+pip install equitas
+```
+
+### Basic Usage
+
+```python
+from equitas_sdk import Equitas, SafetyConfig
+
+# Initialize client
+client = Equitas(
+    openai_api_key="sk-your-openai-key",
+    equitas_api_key="your-equitas-key",
+    tenant_id="your-org-id",
+    backend_api_url="http://localhost:8000",  # Optional
+)
+
+# Make safe API calls
+response = await client.chat.completions.create_async(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello!"}],
+    safety_config=SafetyConfig(
+        on_flag="auto-correct",  # strict | auto-correct | warn-only
+        enable_hallucination_check=True,
+    )
+)
+
+# Access safety metadata
+print(f"Toxicity Score: {response.safety_scores.toxicity_score}")
+print(f"Hallucination Score: {response.safety_scores.hallucination_score}")
+print(f"Bias Flags: {response.safety_scores.bias_flags}")
+print(f"Jailbreak Detected: {response.safety_scores.jailbreak_flag}")
+```
 
 ## Architecture
 
@@ -18,40 +59,108 @@ Equitas provides:
 │  + Equitas SDK  │
 └────────┬────────┘
          │
-         └──────────────► Guardian Backend
-                          ├── Toxicity Detector
-                          ├── Bias Checker
-                          ├── Jailbreak Detector
-                          ├── Explainability Engine
-                          └── Remediation Service
+         └──────────────► Equitas Backend API
+                          ├── Custom Toxicity Detection
+                          ├── Bias Detection
+                          ├── Jailbreak Prevention
+                          ├── Hallucination Detection
+                          └── Credit Management
                           
                           ↓
-                          
-                     Database (Logs, Incidents, Metrics)
+                      
+                     Database (Logs, Metrics, Credits)
                      
                           ↓
                           
-                     Dashboard UI
+                     Dashboard & Analytics
 ```
 
-## Quick Start
+## Safety Features
+
+### 1. Custom Toxicity Detection
+- **Model**: Uses `unitary/toxic-bert` (RoBERTa-based)
+- **No OpenAI Dependency**: Fully independent, no vendor lock-in
+- **Categories**: Detects toxic, severe toxic, obscene, threat, insult, identity hate
+- **Cost**: 1 credit per analysis
+
+### 2. Hallucination Detection
+- **Multi-Component**: Semantic consistency, contradiction detection, factuality checking
+- **Pattern Analysis**: Detects overconfident language and unsupported claims
+- **Context Aware**: Can verify against knowledge base
+- **Cost**: 3 credits per analysis
+
+### 3. Advanced Jailbreak Detection
+- **Pattern Matching**: Detects known jailbreak patterns
+- **Semantic Analysis**: Catches paraphrased attempts
+- **Behavioral Detection**: Identifies suspicious indicators
+- **Adversarial Detection**: Catches encoding tricks
+- **Cost**: 1.5 credits per analysis
+
+### 4. Enhanced Bias Detection
+- **Stereotype Association**: Detects stereotype reinforcement
+- **Demographic Parity**: Tests fairness across demographics
+- **Fairness Metrics**: Statistical parity and equalized odds
+- **Intersectional Analysis**: Detects compounding bias
+- **Cost**: 2 credits per analysis
+
+### 5. Credit Management System
+- **Balance Tracking**: Real-time credit balance monitoring
+- **Transaction History**: Full audit trail
+- **Usage-Based Billing**: Pay only for what you use
+- **Flexible Plans**: Add credits as needed
+
+## Project Structure
+
+```
+equitas/
+├── equitas_sdk/          # Client SDK
+│   ├── client.py         # Main SDK client
+│   ├── models.py         # Data models
+│   └── exceptions.py    # Custom exceptions
+│
+├── backend_api/          # Backend API
+│   ├── main.py          # FastAPI application
+│   ├── api/v1/          # API endpoints
+│   │   ├── analysis.py  # Safety analysis endpoints
+│   │   ├── credits.py   # Credit management
+│   │   ├── metrics.py   # Analytics
+│   │   └── incidents.py # Incident tracking
+│   ├── services/        # ML services
+│   │   ├── custom_toxicity.py
+│   │   ├── hallucination.py
+│   │   ├── advanced_jailbreak.py
+│   │   └── enhanced_bias.py
+│   └── models/          # Database models
+│
+└── examples/            # Usage examples
+```
+
+## Setup & Configuration
 
 ### 1. Install Dependencies
 
 ```bash
-cd backend
-uv init --python 3.11
-uv venv
-source .venv/bin/activate
-uv pip install -e .
+pip install equitas
 ```
 
-### 2. Configure Environment
+### 2. Start Backend API
+
+```bash
+# Option 1: Direct run
+python -m backend_api.main
+
+# Option 2: Using uvicorn
+uvicorn backend_api.main:app --reload --port 8000
+```
+
+Backend will be available at `http://localhost:8000`
+
+### 3. Configure Environment
 
 Create `.env` file:
 
 ```bash
-# OpenAI
+# OpenAI (for LLM calls)
 OPENAI_API_KEY=sk-your-key-here
 
 # Database
@@ -61,107 +170,31 @@ DATABASE_URL=sqlite+aiosqlite:///.equitas.db
 SECRET_KEY=your-secret-key-change-in-production
 ```
 
-### 3. Start Guardian Backend
-
-```bash
-cd backend
-python -m guardian.main
-```
-
-Backend will be available at `http://localhost:8000`
-
-### 4. Use Equitas SDK
+### 4. Add Credits to Tenant
 
 ```python
-from fairsight_sdk import FairSight, SafetyConfig
+import httpx
 
-# Initialize client
-client = FairSight(
-    openai_api_key="sk-...",
-    fairsight_api_key="fs-dev-key-123",
-    tenant_id="your-org",
+# Add credits via API
+response = httpx.post(
+    "http://localhost:8000/v1/credits/add",
+    headers={
+        "Authorization": "Bearer your-api-key",
+        "X-Tenant-ID": "your-tenant-id",
+    },
+    json={
+        "amount": 1000.0,
+        "description": "Initial credits",
+    }
 )
-
-# Make safe API calls
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Hello!"}],
-    safety_config=SafetyConfig(on_flag="auto-correct")
-)
-
-# Access safety metadata
-print(f"Toxicity: {response.safety_scores.toxicity_score}")
-print(f"Categories: {response.safety_scores.toxicity_categories}")
 ```
-
-## Project Structure
-
-```
-backend/
-├── fairsight_sdk/          # Client SDK
-│   ├── client.py           # Main SDK client
-│   ├── models.py           # Data models
-│   └── exceptions.py       # Custom exceptions
-│
-├── guardian/               # Backend API
-│   ├── main.py            # FastAPI app
-│   ├── core/              # Core utilities
-│   │   ├── config.py      # Configuration
-│   │   ├── database.py    # Database setup
-│   │   └── auth.py        # Authentication
-│   ├── models/            # Database models
-│   │   ├── database.py    # SQLAlchemy models
-│   │   └── schemas.py     # Pydantic schemas
-│   ├── services/          # Analysis services
-│   │   ├── toxicity.py    # Toxicity detection
-│   │   ├── bias.py        # Bias checking
-│   │   ├── jailbreak.py   # Jailbreak detection
-│   │   ├── explainability.py  # Explanations
-│   │   └── remediation.py     # Content remediation
-│   └── api/v1/            # API endpoints
-│       ├── analysis.py    # Analysis endpoints
-│       ├── logging.py     # Logging endpoint
-│       ├── metrics.py     # Metrics endpoint
-│       └── incidents.py   # Incidents endpoint
-│
-└── examples/              # Usage examples
-    ├── basic_usage.py     # SDK examples
-    └── test_guardian_api.py  # API testing
-```
-
-## Safety Features
-
-### Toxicity Detection
-- Uses OpenAI Moderation API
-- Detects hate, harassment, violence, self-harm, sexual content
-- Returns toxicity score (0-1) and flagged categories
-
-### Bias Detection
-- Demographic bias checking
-- Paired prompt testing
-- Stereotype detection
-
-### Jailbreak Detection
-- Pattern-based prompt injection detection
-- Instruction override attempts
-- Code injection prevention
-
-### Explainability
-- Highlights problematic text spans
-- Natural language explanations
-- Detailed violation categorization
-
-### Automatic Remediation
-- LLM-based text rewriting
-- Removes toxic language while preserving intent
-- Neutralizes biased content
 
 ## API Endpoints
 
-### Analysis Endpoints
+### Safety Analysis
 
 #### POST `/v1/analysis/toxicity`
-Analyze text for toxicity.
+Analyze text for toxicity using custom ML models.
 
 ```json
 {
@@ -191,32 +224,47 @@ Detect jailbreak attempts.
 }
 ```
 
-#### POST `/v1/analysis/explain`
-Get explanation for flagged content.
+#### POST `/v1/analysis/hallucination`
+Detect hallucinations in responses.
 
 ```json
 {
-  "text": "Flagged text",
-  "issues": ["toxicity", "bias"],
-  "tenant_id": "org123"
+  "prompt": "Original prompt",
+  "response": "LLM response",
+  "tenant_id": "org123",
+  "context": ["fact1", "fact2"]  // Optional
 }
 ```
 
-#### POST `/v1/analysis/remediate`
-Remediate unsafe content.
+### Credit Management
+
+#### GET `/v1/credits/balance`
+Get current credit balance.
+
+#### POST `/v1/credits/add`
+Add credits to account.
 
 ```json
 {
-  "text": "Unsafe text",
-  "issue": "toxicity",
-  "tenant_id": "org123"
+  "amount": 1000.0,
+  "description": "Monthly subscription",
+  "reference_type": "subscription"
 }
 ```
 
-### Logging & Metrics
+#### GET `/v1/credits/transactions`
+Get transaction history with pagination.
 
-#### POST `/v1/log`
-Log API call with safety analysis.
+#### POST `/v1/credits/calculate-cost`
+Calculate cost before executing operations.
+
+```json
+{
+  "operation_types": ["toxicity", "bias", "jailbreak"]
+}
+```
+
+### Analytics & Metrics
 
 #### GET `/v1/metrics`
 Get aggregated metrics (usage, safety scores, incidents).
@@ -224,30 +272,48 @@ Get aggregated metrics (usage, safety scores, incidents).
 #### GET `/v1/incidents`
 Query flagged incidents with filters.
 
-## Authentication
+## Credit System
 
-All endpoints require:
-- **Authorization Header**: `Bearer <api-key>`
-- **X-Tenant-ID Header**: `<tenant-id>`
+### Credit Costs
 
-Default API keys (for development):
-- `fs-dev-key-123` → `tenant_demo`
-- `fs-prod-key-456` → `tenant_prod`
+| Operation | Cost (Credits) |
+|-----------|----------------|
+| Toxicity Detection | 1.0 |
+| Bias Detection | 2.0 |
+| Jailbreak Detection | 1.5 |
+| Hallucination Detection | 3.0 |
+| Remediation | 2.0 |
+| Full Analysis | 7.5 |
 
-## Metrics & Observability
+### Handling Insufficient Credits
 
-Equitas logs comprehensive metrics per API call:
+```python
+from equitas_sdk.exceptions import InsufficientCreditsException
 
-- **Safety Scores**: Toxicity, bias, jailbreak flags
-- **Performance**: Latency, overhead, token counts
-- **Usage**: Safety Inference Units (SIUs) consumed
-- **Incidents**: Flagged content with severity levels
+try:
+    response = await client.chat.completions.create_async(...)
+except InsufficientCreditsException as e:
+    print(f"Insufficient credits!")
+    print(f"Required: {e.required}")
+    print(f"Available: {e.available}")
+    # Handle error - prompt user to add credits
+```
 
-All data is isolated per tenant with encryption at rest.
+## Testing
 
-## Configuration
+### Run Dataset Tests
 
-### Safety Config (SDK)
+```bash
+# Test all components
+python tests/run_dataset_tests.py
+
+# Test specific component
+python tests/run_dataset_tests.py toxicity datasets/toxicity/test.csv
+```
+
+See [tests/DATASET_TESTING_GUIDE.md](tests/DATASET_TESTING_GUIDE.md) for details.
+
+## Safety Configuration
 
 ```python
 SafetyConfig(
@@ -255,90 +321,67 @@ SafetyConfig(
     toxicity_threshold=0.7,
     enable_bias_check=True,
     enable_jailbreak_check=True,
+    enable_hallucination_check=True,
     enable_remediation=True,
 )
 ```
 
-### Tenant Config (Backend)
+### Action Modes
 
-Stored in database per tenant:
-- Safety thresholds
-- Feature flags (enable/disable checks)
-- Privacy settings (anonymization, retention)
-- Credit limits (Safety Units)
-
-## Testing
-
-Run example scripts:
-
-```bash
-# Test SDK
-python examples/basic_usage.py
-
-# Test API directly
-python examples/test_guardian_api.py
-```
-
-## Development
-
-### Running locally
-
-```bash
-# Start backend
-uvicorn guardian.main:app --reload --port 8000
-
-# In another terminal, test SDK
-python examples/basic_usage.py
-```
-
-### Database migrations
-
-```bash
-# Auto-generate migration
-alembic revision --autogenerate -m "Description"
-
-# Apply migration
-alembic upgrade head
-```
+- **strict**: Raises exception on safety violation
+- **auto-correct**: Automatically remediates unsafe content
+- **warn-only**: Returns warnings but allows content
 
 ## Deployment
 
 ### Docker
 
 ```bash
-# Build
-docker build -t equitas-guardian .
-
-# Run
-docker run -p 8000:8000 --env-file .env equitas-guardian
+docker build -t equitas .
+docker run -p 8000:8000 --env-file .env equitas
 ```
 
-### Kubernetes
+### Production Considerations
 
-```bash
-kubectl apply -f k8s/deployment.yaml
-```
+- Use PostgreSQL instead of SQLite
+- Configure proper CORS origins
+- Set up Redis for caching
+- Enable rate limiting
+- Use GPU for faster ML inference
+- Set up monitoring and alerting
+
+## Documentation
+
+- [Technical Roadmap](TECHNICAL_ROADMAP.md) - Detailed technical documentation
+- [Credit System](backend_api/services/CREDIT_SYSTEM.md) - Credit management guide
+- [Dataset Testing](tests/DATASET_TESTING_GUIDE.md) - Testing framework guide
+- [API Docs](http://localhost:8000/docs) - Interactive Swagger UI (when running)
+
+## What Makes Equitas Stand Out
+
+1. **No Vendor Lock-In** - Custom ML models, no dependency on external APIs
+2. **Comprehensive** - Covers toxicity, bias, hallucination, jailbreak, and more
+3. **Enterprise Ready** - Multi-tenant, credit system, audit trails
+4. **Explainable** - Detailed explanations for every safety flag
+5. **Production Ready** - Low latency, scalable, battle-tested
+6. **Easy Integration** - Drop-in replacement for OpenAI API
+
+## Contributing
+
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
 MIT License - see LICENSE file
 
-## Contributing
-
-Contributions welcome! Please see CONTRIBUTING.md
-
-## Documentation
-
-For detailed documentation, see:
-- [PRD.md](PRD.md) - Product Requirements Document
-- [API Documentation](http://localhost:8000/docs) - Swagger UI (when running)
-
 ## Support
 
-For issues or questions:
-- GitHub Issues: [github.com/aryan4codes/Equitas/issues](https://github.com/aryan4codes/Equitas/issues)
-- Email: av.rajpurkar@gmail.com
+- **GitHub Issues**: [github.com/aryan4codes/Equitas/issues](https://github.com/aryan4codes/Equitas/issues)
+- **Email**: av.rajpurkar@gmail.com
+- **Documentation**: [github.com/aryan4codes/Equitas#readme](https://github.com/aryan4codes/Equitas#readme)
 
 ---
 
-Built for AI Safety
+**Built for AI Safety**
+
+Start protecting your AI applications today with Equitas.

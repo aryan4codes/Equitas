@@ -21,3 +21,13 @@ class RemediationFailedException(equitasException):
 class GuardianAPIException(equitasException):
     """Raised when Guardian backend API call fails."""
     pass
+
+
+class InsufficientCreditsException(equitasException):
+    """Raised when tenant has insufficient credits."""
+    
+    def __init__(self, message: str, required: float = None, available: float = None, balance: dict = None):
+        super().__init__(message)
+        self.required = required
+        self.available = available
+        self.balance = balance

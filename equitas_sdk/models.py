@@ -20,6 +20,7 @@ class SafetyConfig(BaseModel):
     )
     enable_bias_check: bool = Field(default=True)
     enable_jailbreak_check: bool = Field(default=True)
+    enable_hallucination_check: bool = Field(default=True)
     enable_remediation: bool = Field(default=True)
 
 
@@ -41,6 +42,14 @@ class SafetyScores(BaseModel):
     jailbreak_flag: bool = Field(
         default=False,
         description="Whether jailbreak/prompt injection detected"
+    )
+    hallucination_score: float = Field(
+        default=0.0,
+        description="Hallucination score from 0 (factual) to 1 (hallucinated)"
+    )
+    hallucination_flagged: bool = Field(
+        default=False,
+        description="Whether hallucination detected"
     )
     response_modification: Literal["none", "rephrased", "blocked"] = Field(
         default="none",

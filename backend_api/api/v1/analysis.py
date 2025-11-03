@@ -13,22 +13,35 @@ from ...models.schemas import (
     JailbreakRequest, JailbreakResponse,
     ExplainRequest, ExplainResponse,
     RemediateRequest, RemediateResponse,
+    HallucinationRequest, HallucinationResponse,
 )
-from ...services.toxicity import ToxicityDetector
-from ...services.bias import BiasDetector
-from ...services.jailbreak import JailbreakDetector
+from ...services.toxicity import ToxicityDetector  # Legacy fallback
+from ...services.custom_toxicity import get_toxicity_detector  # New custom detector
+from ...services.bias import BiasDetector  # Legacy fallback
+from ...services.enhanced_bias import get_bias_detector  # New enhanced detector
+from ...services.jailbreak import JailbreakDetector  # Legacy fallback
+from ...services.advanced_jailbreak import get_jailbreak_detector  # New advanced detector
+from ...services.hallucination import get_hallucination_detector  # New hallucination detector
+from ...services.credit_manager import CreditManager  # Credit management
 from ...services.explainability import ExplainabilityEngine
 from ...services.remediation import RemediationEngine
 from ...services.custom_classifiers import classifier_registry
 from ...services.policy_engine import policy_engine
 from ...services.advanced_bias import bias_test_suite
+from ...exceptions import InsufficientCreditsException
 
 router = APIRouter()
 
-# Initialize services
-toxicity_detector = ToxicityDetector()
-bias_detector = BiasDetector()
-jailbreak_detector = JailbreakDetector()
+# Initialize services (use new detectors)
+custom_toxicity_detector = get_toxicity_detector()
+enhanced_bias_detector = get_bias_detector()
+advanced_jailbreak_detector = get_jailbreak_detector()
+hallucination_detector = get_hallucination_detector()
+
+# Legacy detectors (fallback)
+legacy_toxicity_detector = ToxicityDetector()
+legacy_bias_detector = BiasDetector()
+legacy_jailbreak_detector = JailbreakDetector()
 explainability_engine = ExplainabilityEngine()
 remediation_engine = RemediationEngine()
 
@@ -40,11 +53,47 @@ async def analyze_toxicity(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Analyze text for toxicity using OpenAI Moderation API.
+    Analyze text for toxicity using custom transformer models.
     
+    Uses open-source models instead of OpenAI Moderation API.
     Returns toxicity score, flagged status, and categories.
     """
-    result = await toxicity_detector.analyze(request.text)
+    # Check credits before processing
+    credit_manager = CreditManager(db)
+    try:
+        await credit_manager.check_credits(tenant_id, operation_type="toxicity")
+    except InsufficientCreditsException as e:
+        raise HTTPException(
+            status_code=402,  # Payment Required
+            detail={
+                "error": "Insufficient credits",
+                "required": e.required,
+                "available": e.available,
+                "balance": e.balance,
+            }
+        )
+    
+    result = await custom_toxicity_detector.analyze(request.text)
+    
+    # Deduct credits after successful processing
+    try:
+        await credit_manager.deduct_credits(
+            tenant_id=tenant_id,
+            amount=credit_manager.CREDIT_COSTS["toxicity"],
+            operation_type="toxicity",
+            reference_type="api_call",
+            description="Toxicity analysis",
+        )
+    except InsufficientCreditsException as e:
+        # Should not happen as we checked above, but handle gracefully
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "Insufficient credits",
+                "required": e.required,
+                "available": e.available,
+            }
+        )
     
     return ToxicityResponse(
         toxicity_score=result["toxicity_score"],
@@ -60,14 +109,27 @@ async def analyze_bias(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Analyze text for demographic bias.
+    Analyze text for demographic bias using enhanced detection.
     
-    Uses paired prompt testing and pattern matching.
+    Uses stereotype association, fairness metrics, and demographic parity testing.
     """
-    result = await bias_detector.analyze(
+    # Check credits before processing
+    credit_manager = CreditManager(db)
+    await credit_manager.check_credits(tenant_id, operation_type="bias")
+    
+    result = await enhanced_bias_detector.analyze_comprehensive(
         prompt=request.prompt,
         response=request.response,
-        variants=request.variants,
+        demographic_variants=request.variants,
+    )
+    
+    # Deduct credits after successful processing
+    await credit_manager.deduct_credits(
+        tenant_id=tenant_id,
+        amount=credit_manager.CREDIT_COSTS["bias"],
+        operation_type="bias",
+        reference_type="api_call",
+        description="Bias analysis",
     )
     
     return BiasResponse(
@@ -84,16 +146,72 @@ async def detect_jailbreak(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Detect jailbreak attempts and prompt injections.
+    Detect jailbreak attempts and prompt injections using advanced detection.
     
-    Scans for known jailbreak patterns.
+    Uses pattern matching, semantic analysis, behavioral indicators, and adversarial detection.
     """
-    result = await jailbreak_detector.detect(request.text)
+    # Check credits before processing
+    credit_manager = CreditManager(db)
+    await credit_manager.check_credits(tenant_id, operation_type="jailbreak")
+    
+    # Get context if available (user history, etc.)
+    context = request.__dict__.get("context", None)
+    
+    result = await advanced_jailbreak_detector.detect(request.text, context)
+    
+    # Deduct credits after successful processing
+    await credit_manager.deduct_credits(
+        tenant_id=tenant_id,
+        amount=credit_manager.CREDIT_COSTS["jailbreak"],
+        operation_type="jailbreak",
+        reference_type="api_call",
+        description="Jailbreak detection",
+    )
     
     return JailbreakResponse(
         jailbreak_flag=result["jailbreak_flag"],
         confidence=result["confidence"],
-        patterns_detected=result["patterns_detected"],
+        patterns_detected=result.get("components", {}).get("patterns_found", []),
+    )
+
+
+@router.post("/hallucination", response_model=HallucinationResponse)
+async def detect_hallucination(
+    request: HallucinationRequest,
+    tenant_id: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Detect hallucinations in LLM responses.
+    
+    Uses semantic consistency, contradiction detection, factuality checking,
+    pattern analysis, and confidence calibration.
+    """
+    # Check credits before processing
+    credit_manager = CreditManager(db)
+    await credit_manager.check_credits(tenant_id, operation_type="hallucination")
+    
+    result = await hallucination_detector.detect(
+        prompt=request.prompt,
+        response=request.response,
+        context=request.context,
+    )
+    
+    # Deduct credits after successful processing
+    await credit_manager.deduct_credits(
+        tenant_id=tenant_id,
+        amount=credit_manager.CREDIT_COSTS["hallucination"],
+        operation_type="hallucination",
+        reference_type="api_call",
+        description="Hallucination detection",
+    )
+    
+    return HallucinationResponse(
+        hallucination_score=result["hallucination_score"],
+        flagged=result["flagged"],
+        confidence=result["confidence"],
+        recommendation=result["recommendation"],
+        components=result.get("components", {}),
     )
 
 

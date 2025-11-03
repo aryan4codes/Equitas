@@ -1,13 +1,13 @@
 """
-Test suite for Guardian services.
+Test suite for Equitas backend services.
 """
 
 import pytest
-from guardian.services.toxicity import ToxicityDetector
-from guardian.services.bias import BiasDetector
-from guardian.services.jailbreak import JailbreakDetector
-from guardian.services.explainability import ExplainabilityEngine
-from guardian.services.remediation import RemediationEngine
+from backend_api.services.toxicity import ToxicityDetector
+from backend_api.services.bias import BiasDetector
+from backend_api.services.jailbreak import JailbreakDetector
+from backend_api.services.explainability import ExplainabilityEngine
+from backend_api.services.remediation import RemediationEngine
 
 
 @pytest.mark.asyncio

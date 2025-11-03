@@ -3,7 +3,6 @@ Example usage of equitas SDK.
 """
 
 import asyncio
-from backend.equitas_sdk.client import Equitas
 from equitas_sdk import Equitas, SafetyConfig
 import os 
 from dotenv import load_dotenv
@@ -16,7 +15,7 @@ async def main():
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         equitas_api_key=os.getenv("equitas_API_KEY"),
         tenant_id="tenant_demo",
-        guardian_base_url="http://localhost:8000",
+        backend_api_url="http://localhost:8000",
         user_id="user_001",
     )
     

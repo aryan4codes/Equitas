@@ -14,7 +14,7 @@ ENV PATH="/root/.cargo/bin:$PATH"
 # Copy project files
 COPY pyproject.toml ./
 COPY equitas_sdk ./equitas_sdk
-COPY guardian ./guardian
+COPY backend_api ./backend_api
 COPY examples ./examples
 COPY main.py ./
 
@@ -36,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run application
-CMD ["uvicorn", "guardian.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

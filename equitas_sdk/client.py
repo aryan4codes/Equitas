@@ -10,7 +10,7 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
 from .models import SafeCompletionResponse, SafetyConfig, SafetyScores
-from .exceptions import SafetyViolationException, RemediationFailedException
+from .exceptions import SafetyViolationException, RemediationFailedException, InsufficientCreditsException
 
 
 class Equitas:
@@ -36,7 +36,7 @@ class Equitas:
         openai_api_key: str,
         equitas_api_key: str,
         tenant_id: str,
-        guardian_base_url: str = "http://localhost:8000",
+        backend_api_url: str = "http://localhost:8000",
         user_id: Optional[str] = None,
     ):
         """
@@ -44,18 +44,18 @@ class Equitas:
         
         Args:
             openai_api_key: OpenAI API key
-            equitas_api_key: equitas Guardian API key
+            equitas_api_key: equitas API key
             tenant_id: Organization/tenant identifier
-            guardian_base_url: URL of Guardian backend API
+            backend_api_url: URL of Equitas backend API
             user_id: Optional user identifier for logging
         """
         self.openai_client = OpenAI(api_key=openai_api_key)
         self.equitas_api_key = equitas_api_key
         self.tenant_id = tenant_id
         self.user_id = user_id or "default_user"
-        self.guardian_base_url = guardian_base_url.rstrip("/")
+        self.backend_api_url = backend_api_url.rstrip("/")
         
-        # Initialize HTTP client for Guardian API
+        # Initialize HTTP client for backend API
         self.http_client = httpx.AsyncClient(
             headers={
                 "Authorization": f"Bearer {equitas_api_key}",
@@ -78,11 +78,21 @@ class Equitas:
         """Analyze text for toxicity."""
         try:
             response = await self.http_client.post(
-                f"{self.guardian_base_url}/v1/analysis/toxicity",
+                f"{self.backend_api_url}/v1/analysis/toxicity",
                 json={"text": text, "tenant_id": self.tenant_id},
             )
+            if response.status_code == 402:  # Payment Required
+                error_data = response.json()
+                raise InsufficientCreditsException(
+                    error_data.get("detail", {}).get("error", "Insufficient credits"),
+                    required=error_data.get("detail", {}).get("required"),
+                    available=error_data.get("detail", {}).get("available"),
+                    balance=error_data.get("detail", {}).get("balance"),
+                )
             response.raise_for_status()
             return response.json()
+        except InsufficientCreditsException:
+            raise
         except Exception as e:
             print(f"Toxicity analysis failed: {e}")
             return {"toxicity_score": 0.0, "flagged": False, "categories": []}
@@ -91,7 +101,7 @@ class Equitas:
         """Analyze for demographic bias."""
         try:
             response = await self.http_client.post(
-                f"{self.guardian_base_url}/v1/analysis/bias",
+                f"{self.backend_api_url}/v1/analysis/bias",
                 json={
                     "prompt": prompt,
                     "response": response_text,
@@ -108,7 +118,7 @@ class Equitas:
         """Detect jailbreak/prompt injection attempts."""
         try:
             response = await self.http_client.post(
-                f"{self.guardian_base_url}/v1/analysis/jailbreak",
+                f"{self.backend_api_url}/v1/analysis/jailbreak",
                 json={"text": text, "tenant_id": self.tenant_id},
             )
             response.raise_for_status()
@@ -117,11 +127,29 @@ class Equitas:
             print(f"Jailbreak detection failed: {e}")
             return {"jailbreak_flag": False}
 
+    async def _detect_hallucination(self, prompt: str, response_text: str, context: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Detect hallucinations in response."""
+        try:
+            response = await self.http_client.post(
+                f"{self.backend_api_url}/v1/analysis/hallucination",
+                json={
+                    "prompt": prompt,
+                    "response": response_text,
+                    "tenant_id": self.tenant_id,
+                    "context": context or [],
+                },
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Hallucination detection failed: {e}")
+            return {"hallucination_score": 0.0, "flagged": False, "confidence": 1.0}
+
     async def _get_explanation(self, text: str, issues: List[str]) -> Dict[str, Any]:
         """Get explanation for flagged content."""
         try:
             response = await self.http_client.post(
-                f"{self.guardian_base_url}/v1/analysis/explain",
+                f"{self.backend_api_url}/v1/analysis/explain",
                 json={"text": text, "issues": issues, "tenant_id": self.tenant_id},
             )
             response.raise_for_status()
@@ -134,7 +162,7 @@ class Equitas:
         """Remediate unsafe content."""
         try:
             response = await self.http_client.post(
-                f"{self.guardian_base_url}/v1/analysis/remediate",
+                f"{self.backend_api_url}/v1/analysis/remediate",
                 json={"text": text, "issue": issue, "tenant_id": self.tenant_id},
             )
             response.raise_for_status()
@@ -266,13 +294,23 @@ class CompletionsWrapper:
         # Extract response text
         response_text = completion.choices[0].message.content or ""
         
-        # 3. Post-check: Analyze response for toxicity and bias
+        # 3. Post-check: Analyze response for toxicity, bias, and hallucination
         response_toxicity_task = self.client._analyze_toxicity(response_text)
         bias_task = self.client._analyze_bias(prompt_text, response_text)
+        hallucination_task = None
         
-        response_toxicity_result, bias_result = await asyncio.gather(
-            response_toxicity_task, bias_task
-        )
+        if safety_config.enable_hallucination_check:
+            hallucination_task = self.client._detect_hallucination(prompt_text, response_text)
+        
+        if hallucination_task:
+            response_toxicity_result, bias_result, hallucination_result = await asyncio.gather(
+                response_toxicity_task, bias_task, hallucination_task
+            )
+        else:
+            response_toxicity_result, bias_result = await asyncio.gather(
+                response_toxicity_task, bias_task
+            )
+            hallucination_result = {"hallucination_score": 0.0, "flagged": False, "confidence": 1.0}
         
         # Combine prompt and response toxicity scores (take the maximum)
         max_toxicity_score = max(
@@ -291,6 +329,8 @@ class CompletionsWrapper:
             toxicity_categories=combined_categories,
             bias_flags=bias_result.get("flags", []),
             jailbreak_flag=jailbreak_result.get("jailbreak_flag", False),
+            hallucination_score=hallucination_result.get("hallucination_score", 0.0),
+            hallucination_flagged=hallucination_result.get("flagged", False),
             response_modification="none",
         )
         
@@ -300,6 +340,7 @@ class CompletionsWrapper:
             or response_toxicity_result.get("flagged", False)
             or len(bias_result.get("flags", [])) > 0
             or jailbreak_result.get("jailbreak_flag", False)
+            or hallucination_result.get("flagged", False)
         )
         
         final_response_text = response_text
@@ -314,6 +355,8 @@ class CompletionsWrapper:
                 issues.append("bias")
             if jailbreak_result.get("jailbreak_flag"):
                 issues.append("jailbreak")
+            if hallucination_result.get("flagged"):
+                issues.append("hallucination")
             
             # Get explanation
             explanation_result = await self.client._get_explanation(response_text, issues)

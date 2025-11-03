@@ -1,25 +1,25 @@
 """
-equitas - AI Safety & Observability Platform
+Equitas - AI Safety & Observability Platform
 
-Entry point for running the Guardian backend or SDK examples.
+Entry point for running the backend API or SDK examples.
 """
 
 import sys
 import argparse
 
 
-def run_guardian():
-    """Run the Guardian backend server."""
+def run_backend():
+    """Run the Equitas backend API server."""
     import uvicorn
-    from guardian.main import app
+    from backend_api.main import app
     
-    print(" Starting equitas Guardian Backend...")
-    print(" API will be available at http://localhost:8000")
-    print(" API docs at http://localhost:8000/docs")
+    print("Starting Equitas Backend API...")
+    print("API will be available at http://localhost:8000")
+    print("API docs at http://localhost:8000/docs")
     print("\nPress CTRL+C to stop\n")
     
     uvicorn.run(
-        "guardian.main:app",
+        "backend_api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
@@ -37,17 +37,17 @@ def run_examples():
     
     from basic_usage import main as basic_main
     
-    print("🎯 Running equitas SDK Examples...")
+    print("Running Equitas SDK Examples...")
     print("=" * 60)
     asyncio.run(basic_main())
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="equitas - AI Safety Platform")
+    parser = argparse.ArgumentParser(description="Equitas - AI Safety Platform")
     parser.add_argument(
         "command",
-        choices=["guardian", "examples", "help"],
+        choices=["backend", "examples", "help"],
         nargs="?",
         default="help",
         help="Command to run"
@@ -55,15 +55,15 @@ def main():
     
     args = parser.parse_args()
     
-    if args.command == "guardian":
-        run_guardian()
+    if args.command == "backend":
+        run_backend()
     elif args.command == "examples":
         run_examples()
     else:
-        print("equitas - AI Safety & Observability Platform")
+        print("Equitas - AI Safety & Observability Platform")
         print("\nUsage:")
-        print("  python main.py guardian   - Start Guardian backend")
-        print("  python main.py examples   - Run SDK examples")
+        print("  python main.py backend   - Start backend API")
+        print("  python main.py examples  - Run SDK examples")
         print("\nFor more information, see README.md")
 
 

@@ -12,7 +12,7 @@ def main():
         openai_api_key="sk-your-openai-api-key",
         equitas_api_key="fs-dev-key-123",
         tenant_id="tenant_demo",
-        guardian_base_url="http://localhost:8000",
+        backend_api_url="http://localhost:8000",
         user_id="user_001",
     )
     
