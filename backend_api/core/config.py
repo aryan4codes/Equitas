@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str = "sqlite+aiosqlite:///./equitas.db"
+    mongodb_url: str = ""  # MongoDB connection URL
+    mongodb_database: str = "equitas"  # MongoDB database name
     
     # OpenAI
     openai_api_key: str = ""
@@ -23,6 +25,10 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    
+    # Clerk Authentication
+    clerk_secret_key: str = ""  # Clerk secret key for backend verification
+    clerk_publishable_key: str = ""  # Clerk publishable key (frontend)
     
     # Guardian Settings
     default_toxicity_threshold: float = 0.7

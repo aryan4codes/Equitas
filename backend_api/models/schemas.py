@@ -119,8 +119,8 @@ class LogRequest(BaseModel):
 class LogResponse(BaseModel):
     """Response from logging."""
     success: bool
-    log_id: Optional[int] = None
-    incident_id: Optional[int] = None
+    log_id: Optional[str] = None  # Changed to str for MongoDB ObjectId
+    incident_id: Optional[str] = None  # Changed to str for MongoDB ObjectId
 
 
 # Metrics
@@ -163,7 +163,7 @@ class IncidentQuery(BaseModel):
 
 class IncidentResponse(BaseModel):
     """Incident details."""
-    id: int
+    id: str  # Changed to str for MongoDB ObjectId compatibility
     tenant_id: str
     user_id: str
     incident_type: str

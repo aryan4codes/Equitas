@@ -8,21 +8,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
-from .api.v1 import analysis, logging, metrics, incidents, credits
+from .api.v1 import analysis, logging, metrics, incidents, credits, users, api_keys, credit_requests
 from .core.config import get_settings
-from .core.database import engine, Base
+from .core.mongodb import get_mongodb_client, close_mongodb_connection
 from .core.auth import verify_api_key
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Create database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Initialize MongoDB connection
+    try:
+        get_mongodb_client()
+        print("✅ MongoDB connected successfully")
+    except ValueError as e:
+        print(f"❌ Warning: MongoDB connection failed: {e}")
+        print("   Please add MONGODB_URL to your .env file")
+        print("   Example: MONGODB_URL=mongodb://localhost:27017")
+        print("   See MONGODB_SETUP.md for detailed instructions")
+    except Exception as e:
+        print(f"❌ Warning: MongoDB connection failed: {e}")
+        print("   Please check MONGODB_URL in your .env file")
+        print("   See MONGODB_SETUP.md for detailed instructions")
+    
     yield
     # Cleanup
-    await engine.dispose()
+    await close_mongodb_connection()
 
 
 # Create FastAPI app
@@ -93,6 +104,25 @@ app.include_router(
     prefix="/v1/credits",
     tags=["credits"],
     dependencies=[Depends(verify_api_key)],
+)
+
+# User management endpoints (Clerk auth)
+app.include_router(
+    users.router,
+    prefix="/v1/users",
+    tags=["users"],
+)
+
+app.include_router(
+    api_keys.router,
+    prefix="/v1/api-keys",
+    tags=["api-keys"],
+)
+
+app.include_router(
+    credit_requests.router,
+    prefix="/v1/credit-requests",
+    tags=["credit-requests"],
 )
 
 

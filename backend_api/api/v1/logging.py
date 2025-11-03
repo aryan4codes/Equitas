@@ -1,15 +1,15 @@
 """
-Logging API endpoints.
+Logging API endpoints - MongoDB version.
 """
 
 from fastapi import APIRouter, Depends, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from datetime import datetime
 
-from ...core.database import get_db
+from ...core.mongodb import get_database
 from ...core.auth import verify_api_key
 from ...models.schemas import LogRequest, LogResponse
-from ...models.database import APILog, Incident, TenantConfig
+from ...models.mongodb_models import APILog, Incident, TenantConfig
 
 router = APIRouter()
 
@@ -23,44 +23,46 @@ async def calculate_safety_units(log_data: LogRequest) -> float:
     return token_units + check_units
 
 
-async def create_incident_if_flagged(db: AsyncSession, log: APILog):
+async def create_incident_if_flagged(db: AsyncIOMotorDatabase, log_data: dict) -> str:
     """Create incident record for flagged content."""
-    if not log.flagged:
+    if not log_data.get("flagged"):
         return None
     
     # Determine incident type and severity
     incident_type = "toxicity"
     severity = "medium"
     
-    if log.toxicity_score > 0.8:
+    toxicity_score = log_data.get("toxicity_score", 0.0)
+    jailbreak_flag = log_data.get("jailbreak_flag", False)
+    bias_flags = log_data.get("bias_flags", [])
+    
+    if toxicity_score > 0.8:
         incident_type = "toxicity"
-        severity = "high" if log.toxicity_score > 0.9 else "medium"
-    elif log.jailbreak_flag:
+        severity = "high" if toxicity_score > 0.9 else "medium"
+    elif jailbreak_flag:
         incident_type = "jailbreak"
         severity = "critical"
-    elif len(log.bias_flags) > 0:
+    elif len(bias_flags) > 0:
         incident_type = "bias"
         severity = "medium"
     
     incident = Incident(
-        tenant_id=log.tenant_id,
-        user_id=log.user_id,
+        tenant_id=log_data["tenant_id"],
+        user_id=log_data["user_id"],
         incident_type=incident_type,
         severity=severity,
         status="pending",
-        prompt=log.prompt,
-        response=log.response,
-        remediated_response=log.original_response if log.original_response else None,
-        toxicity_score=log.toxicity_score,
-        bias_score=log.bias_score,
-        explanation=log.explanation,
-        log_id=log.id,
+        prompt=log_data["prompt"],
+        response=log_data["response"],
+        remediated_response=log_data.get("original_response"),
+        toxicity_score=toxicity_score,
+        bias_score=log_data.get("bias_score", 0.0),
+        explanation=log_data.get("explanation"),
+        log_id=str(log_data["_id"]),
     )
     
-    db.add(incident)
-    await db.flush()
-    
-    return incident.id
+    result = await db.incidents.insert_one(incident.dict(by_alias=True, exclude={"id"}))
+    return str(result.inserted_id)
 
 
 @router.post("/log", response_model=LogResponse)
@@ -68,7 +70,7 @@ async def log_api_call(
     request: LogRequest,
     background_tasks: BackgroundTasks,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Log API call with safety analysis results.
@@ -101,24 +103,25 @@ async def log_api_call(
         explanation=request.explanation,
     )
     
-    db.add(log)
-    await db.flush()
+    result = await mongodb.api_logs.insert_one(log.dict(by_alias=True, exclude={"id"}))
+    log_id = str(result.inserted_id)
     
     # Create incident if flagged
-    incident_id = await create_incident_if_flagged(db, log)
+    incident_id = None
+    if request.flagged:
+        log_data = log.dict(by_alias=True)
+        log_data["_id"] = result.inserted_id
+        incident_id = await create_incident_if_flagged(mongodb, log_data)
     
     # Update tenant's safety units
-    stmt = select(TenantConfig).where(TenantConfig.tenant_id == request.tenant_id)
-    result = await db.execute(stmt)
-    tenant_config = result.scalar_one_or_none()
-    
-    if tenant_config:
-        tenant_config.safety_units_used += safety_units
-    
-    await db.commit()
+    await mongodb.tenant_configs.update_one(
+        {"tenant_id": request.tenant_id},
+        {"$inc": {"safety_units_used": safety_units}},
+        upsert=True
+    )
     
     return LogResponse(
         success=True,
-        log_id=log.id,
-        incident_id=incident_id,
+        log_id=log_id,  # Return MongoDB ObjectId as string
+        incident_id=incident_id,  # Return MongoDB ObjectId as string
     )

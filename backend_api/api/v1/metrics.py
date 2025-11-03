@@ -1,17 +1,15 @@
 """
-Metrics API endpoints.
+Metrics API endpoints - MongoDB version.
 """
 
 from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from ...core.database import get_db
+from ...core.mongodb import get_database
 from ...core.auth import verify_api_key
 from ...models.schemas import MetricsQuery, MetricsResponse
-from ...models.database import APILog, Incident
 
 router = APIRouter()
 
@@ -21,7 +19,7 @@ async def get_metrics(
     tenant_id: str = Depends(verify_api_key),
     start_date: datetime = Query(None),
     end_date: datetime = Query(None),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Get aggregated metrics for tenant.
@@ -35,45 +33,50 @@ async def get_metrics(
         start_date = end_date - timedelta(days=1)
     
     # Query logs in time range
-    stmt = select(APILog).where(
-        APILog.tenant_id == tenant_id,
-        APILog.created_at >= start_date,
-        APILog.created_at <= end_date,
-    )
-    result = await db.execute(stmt)
-    logs = result.scalars().all()
+    query = {
+        "tenant_id": tenant_id,
+        "created_at": {
+            "$gte": start_date,
+            "$lte": end_date,
+        }
+    }
+    
+    cursor = mongodb.api_logs.find(query)
+    logs = await cursor.to_list(length=10000)  # Limit to prevent memory issues
     
     # Calculate metrics
     total_calls = len(logs)
-    flagged_calls = sum(1 for log in logs if log.flagged)
+    flagged_calls = sum(1 for log in logs if log.get("flagged", False))
     
     avg_toxicity = (
-        sum(log.toxicity_score for log in logs) / total_calls
+        sum(log.get("toxicity_score", 0.0) for log in logs) / total_calls
         if total_calls > 0 else 0.0
     )
     avg_bias = (
-        sum(log.bias_score for log in logs) / total_calls
+        sum(log.get("bias_score", 0.0) for log in logs) / total_calls
         if total_calls > 0 else 0.0
     )
     avg_latency = (
-        sum(log.latency_ms for log in logs) / total_calls
+        sum(log.get("latency_ms", 0.0) for log in logs) / total_calls
         if total_calls > 0 else 0.0
     )
     
-    safety_units = sum(log.safety_units_used for log in logs)
+    safety_units = sum(log.get("safety_units_used", 0.0) for log in logs)
     
     # Count incidents by category
-    incidents_stmt = select(Incident).where(
-        Incident.tenant_id == tenant_id,
-        Incident.created_at >= start_date,
-        Incident.created_at <= end_date,
-    )
-    incidents_result = await db.execute(incidents_stmt)
-    incidents = incidents_result.scalars().all()
+    incidents_query = {
+        "tenant_id": tenant_id,
+        "created_at": {
+            "$gte": start_date,
+            "$lte": end_date,
+        }
+    }
+    incidents_cursor = mongodb.incidents.find(incidents_query)
+    incidents = await incidents_cursor.to_list(length=10000)
     
     incidents_by_category = {}
     for incident in incidents:
-        category = incident.incident_type
+        category = incident.get("incident_type", "unknown")
         incidents_by_category[category] = incidents_by_category.get(category, 0) + 1
     
     return MetricsResponse(

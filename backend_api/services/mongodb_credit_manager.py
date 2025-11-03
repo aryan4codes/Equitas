@@ -1,21 +1,18 @@
 """
-Credit management service for Equitas.
-
-Handles credit checking, deduction, addition, and transaction history.
+MongoDB credit manager - handles credit operations using MongoDB.
 """
 
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func
-from sqlalchemy.exc import IntegrityError
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from bson import ObjectId
 
-from ..models.database import TenantConfig, CreditTransaction
 from ..exceptions import InsufficientCreditsException, CreditOperationException
+from ..models.mongodb_models import TenantConfig, CreditTransaction
 
 
-class CreditManager:
-    """Manages credit operations for tenants."""
+class MongoCreditManager:
+    """Manages credit operations for tenants using MongoDB."""
     
     # Credit costs per operation type
     CREDIT_COSTS = {
@@ -26,17 +23,19 @@ class CreditManager:
         "remediation": 2.0,
         "explain": 1.0,
         "custom_classifier": 1.5,
-        "full_analysis": 7.5,  # Sum of all checks
+        "full_analysis": 7.5,
     }
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncIOMotorDatabase):
         """
         Initialize credit manager.
         
         Args:
-            db: Database session
+            db: MongoDB database instance
         """
         self.db = db
+        self.tenant_configs = db.tenant_configs
+        self.credit_transactions = db.credit_transactions
     
     async def get_balance(self, tenant_id: str) -> Dict[str, Any]:
         """
@@ -48,29 +47,25 @@ class CreditManager:
         Returns:
             Dict with balance, limit, and usage info
         """
-        result = await self.db.execute(
-            select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
-        )
-        tenant_config = result.scalar_one_or_none()
+        tenant_config = await self.tenant_configs.find_one({"tenant_id": tenant_id})
         
         if not tenant_config:
             # Create default config if doesn't exist
-            tenant_config = TenantConfig(
+            default_config = TenantConfig(
                 tenant_id=tenant_id,
                 credit_balance=0.0,
                 credit_enabled=True,
             )
-            self.db.add(tenant_config)
-            await self.db.commit()
-            await self.db.refresh(tenant_config)
+            result = await self.tenant_configs.insert_one(default_config.dict(by_alias=True, exclude={"id"}))
+            tenant_config = await self.tenant_configs.find_one({"_id": result.inserted_id})
         
         return {
             "tenant_id": tenant_id,
-            "credit_balance": tenant_config.credit_balance,
-            "credit_enabled": tenant_config.credit_enabled,
-            "safety_units_limit": tenant_config.safety_units_limit,
-            "safety_units_used": tenant_config.safety_units_used,
-            "available_credits": tenant_config.credit_balance,
+            "credit_balance": tenant_config["credit_balance"],
+            "credit_enabled": tenant_config["credit_enabled"],
+            "safety_units_limit": tenant_config.get("safety_units_limit", 10000.0),
+            "safety_units_used": tenant_config.get("safety_units_used", 0.0),
+            "available_credits": tenant_config["credit_balance"],
         }
     
     async def check_credits(
@@ -144,25 +139,22 @@ class CreditManager:
             InsufficientCreditsException: If insufficient credits
         """
         # Get current balance
-        result = await self.db.execute(
-            select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
-        )
-        tenant_config = result.scalar_one_or_none()
+        tenant_config = await self.tenant_configs.find_one({"tenant_id": tenant_id})
         
         if not tenant_config:
             raise CreditOperationException(f"Tenant {tenant_id} not found")
         
         # Check if credit system is disabled
-        if not tenant_config.credit_enabled:
+        if not tenant_config["credit_enabled"]:
             return {
                 "success": True,
-                "credit_balance": tenant_config.credit_balance,
+                "credit_balance": tenant_config["credit_balance"],
                 "amount_deducted": 0.0,
                 "transaction_id": None,
                 "credit_enabled": False,
             }
         
-        balance_before = tenant_config.credit_balance
+        balance_before = tenant_config["credit_balance"]
         
         if balance_before < amount:
             raise InsufficientCreditsException(
@@ -173,39 +165,43 @@ class CreditManager:
         
         # Deduct credits
         balance_after = balance_before - amount
-        tenant_config.credit_balance = balance_after
+        
+        # Update tenant config
+        await self.tenant_configs.update_one(
+            {"tenant_id": tenant_id},
+            {
+                "$set": {
+                    "credit_balance": balance_after,
+                    "updated_at": datetime.utcnow(),
+                }
+            }
+        )
         
         # Create transaction record
         transaction = CreditTransaction(
             tenant_id=tenant_id,
             transaction_type="deduct",
-            amount=-amount,  # Negative for deduction
+            amount=-amount,
             balance_before=balance_before,
             balance_after=balance_after,
             reference_type=reference_type or "api_call",
             reference_id=reference_id,
             description=description or f"Credits deducted for {operation_type}",
-            extra_metadata=metadata or {},
+            metadata=metadata or {},
         )
         
-        self.db.add(transaction)
+        result = await self.credit_transactions.insert_one(
+            transaction.dict(by_alias=True, exclude={"id"})
+        )
         
-        try:
-            await self.db.commit()
-            await self.db.refresh(transaction)
-            await self.db.refresh(tenant_config)
-            
-            return {
-                "success": True,
-                "credit_balance": balance_after,
-                "amount_deducted": amount,
-                "transaction_id": transaction.id,
-                "balance_before": balance_before,
-                "balance_after": balance_after,
-            }
-        except IntegrityError as e:
-            await self.db.rollback()
-            raise CreditOperationException(f"Failed to deduct credits: {e}")
+        return {
+            "success": True,
+            "credit_balance": balance_after,
+            "amount_deducted": amount,
+            "transaction_id": str(result.inserted_id),
+            "balance_before": balance_before,
+            "balance_after": balance_after,
+        }
     
     async def add_credits(
         self,
@@ -233,24 +229,33 @@ class CreditManager:
             Dict with new balance and transaction info
         """
         # Get current balance
-        result = await self.db.execute(
-            select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
-        )
-        tenant_config = result.scalar_one_or_none()
+        tenant_config = await self.tenant_configs.find_one({"tenant_id": tenant_id})
         
         if not tenant_config:
             # Create tenant config if doesn't exist
-            tenant_config = TenantConfig(
+            default_config = TenantConfig(
                 tenant_id=tenant_id,
                 credit_balance=0.0,
                 credit_enabled=True,
             )
-            self.db.add(tenant_config)
-            await self.db.flush()
+            await self.tenant_configs.insert_one(
+                default_config.dict(by_alias=True, exclude={"id"})
+            )
+            tenant_config = await self.tenant_configs.find_one({"tenant_id": tenant_id})
         
-        balance_before = tenant_config.credit_balance
+        balance_before = tenant_config["credit_balance"]
         balance_after = balance_before + amount
-        tenant_config.credit_balance = balance_after
+        
+        # Update tenant config
+        await self.tenant_configs.update_one(
+            {"tenant_id": tenant_id},
+            {
+                "$set": {
+                    "credit_balance": balance_after,
+                    "updated_at": datetime.utcnow(),
+                }
+            }
+        )
         
         # Create transaction record
         transaction = CreditTransaction(
@@ -263,57 +268,21 @@ class CreditManager:
             reference_id=reference_id,
             description=description or f"Credits added: {amount}",
             created_by=created_by,
-            extra_metadata=metadata or {},
-        )
-        
-        self.db.add(transaction)
-        
-        try:
-            await self.db.commit()
-            await self.db.refresh(transaction)
-            await self.db.refresh(tenant_config)
-            
-            return {
-                "success": True,
-                "credit_balance": balance_after,
-                "amount_added": amount,
-                "transaction_id": transaction.id,
-                "balance_before": balance_before,
-                "balance_after": balance_after,
-            }
-        except IntegrityError as e:
-            await self.db.rollback()
-            raise CreditOperationException(f"Failed to add credits: {e}")
-    
-    async def refund_credits(
-        self,
-        tenant_id: str,
-        amount: float,
-        original_transaction_id: Optional[int] = None,
-        description: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Refund credits to tenant account.
-        
-        Args:
-            tenant_id: Tenant identifier
-            amount: Amount to refund
-            original_transaction_id: ID of original transaction being refunded
-            description: Optional description
-            metadata: Optional metadata
-            
-        Returns:
-            Dict with new balance and transaction info
-        """
-        return await self.add_credits(
-            tenant_id=tenant_id,
-            amount=amount,
-            reference_type="refund",
-            reference_id=str(original_transaction_id) if original_transaction_id else None,
-            description=description or f"Credit refund: {amount}",
             metadata=metadata or {},
         )
+        
+        result = await self.credit_transactions.insert_one(
+            transaction.dict(by_alias=True, exclude={"id"})
+        )
+        
+        return {
+            "success": True,
+            "credit_balance": balance_after,
+            "amount_added": amount,
+            "transaction_id": str(result.inserted_id),
+            "balance_before": balance_before,
+            "balance_after": balance_after,
+        }
     
     async def get_transaction_history(
         self,
@@ -334,43 +303,31 @@ class CreditManager:
         Returns:
             Dict with transactions and pagination info
         """
-        query = select(CreditTransaction).where(
-            CreditTransaction.tenant_id == tenant_id
-        )
+        query = {"tenant_id": tenant_id}
         
         if transaction_type:
-            query = query.where(CreditTransaction.transaction_type == transaction_type)
-        
-        query = query.order_by(CreditTransaction.created_at.desc()).limit(limit).offset(offset)
-        
-        result = await self.db.execute(query)
-        transactions = result.scalars().all()
+            query["transaction_type"] = transaction_type
         
         # Get total count
-        count_query = select(CreditTransaction).where(
-            CreditTransaction.tenant_id == tenant_id
-        )
-        if transaction_type:
-            count_query = count_query.where(CreditTransaction.transaction_type == transaction_type)
+        total = await self.credit_transactions.count_documents(query)
         
-        total_result = await self.db.execute(
-            select(func.count()).select_from(count_query.subquery())
-        )
-        total = total_result.scalar() or 0
+        # Get transactions
+        cursor = self.credit_transactions.find(query).sort("created_at", -1).skip(offset).limit(limit)
+        transactions = await cursor.to_list(length=limit)
         
         return {
             "transactions": [
                 {
-                    "id": t.id,
-                    "transaction_type": t.transaction_type,
-                    "amount": t.amount,
-                    "balance_before": t.balance_before,
-                    "balance_after": t.balance_after,
-                    "reference_type": t.reference_type,
-                    "reference_id": t.reference_id,
-                    "description": t.description,
-                    "created_at": t.created_at.isoformat(),
-                    "created_by": t.created_by,
+                    "id": str(t["_id"]),
+                    "transaction_type": t["transaction_type"],
+                    "amount": t["amount"],
+                    "balance_before": t["balance_before"],
+                    "balance_after": t["balance_after"],
+                    "reference_type": t.get("reference_type"),
+                    "reference_id": t.get("reference_id"),
+                    "description": t.get("description"),
+                    "created_at": t["created_at"].isoformat() if isinstance(t["created_at"], datetime) else t["created_at"],
+                    "created_by": t.get("created_by"),
                 }
                 for t in transactions
             ],
@@ -396,36 +353,4 @@ class CreditManager:
         for op_type in operation_types:
             total += self.CREDIT_COSTS.get(op_type, 1.0)
         return total
-    
-    async def set_credit_enabled(
-        self,
-        tenant_id: str,
-        enabled: bool,
-    ) -> Dict[str, Any]:
-        """
-        Enable or disable credit checking for tenant.
-        
-        Args:
-            tenant_id: Tenant identifier
-            enabled: Whether to enable credit checking
-            
-        Returns:
-            Updated config
-        """
-        result = await self.db.execute(
-            select(TenantConfig).where(TenantConfig.tenant_id == tenant_id)
-        )
-        tenant_config = result.scalar_one_or_none()
-        
-        if not tenant_config:
-            raise CreditOperationException(f"Tenant {tenant_id} not found")
-        
-        tenant_config.credit_enabled = enabled
-        await self.db.commit()
-        await self.db.refresh(tenant_config)
-        
-        return {
-            "tenant_id": tenant_id,
-            "credit_enabled": enabled,
-        }
 

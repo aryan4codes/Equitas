@@ -3,10 +3,11 @@ Analysis API endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from ...core.database import get_db
+from ...core.mongodb import get_database
 from ...core.auth import verify_api_key
+from ...services.mongodb_credit_manager import MongoCreditManager
 from ...models.schemas import (
     ToxicityRequest, ToxicityResponse,
     BiasRequest, BiasResponse,
@@ -22,7 +23,6 @@ from ...services.enhanced_bias import get_bias_detector  # New enhanced detector
 from ...services.jailbreak import JailbreakDetector  # Legacy fallback
 from ...services.advanced_jailbreak import get_jailbreak_detector  # New advanced detector
 from ...services.hallucination import get_hallucination_detector  # New hallucination detector
-from ...services.credit_manager import CreditManager  # Credit management
 from ...services.explainability import ExplainabilityEngine
 from ...services.remediation import RemediationEngine
 from ...services.custom_classifiers import classifier_registry
@@ -50,7 +50,7 @@ remediation_engine = RemediationEngine()
 async def analyze_toxicity(
     request: ToxicityRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Analyze text for toxicity using custom transformer models.
@@ -59,7 +59,7 @@ async def analyze_toxicity(
     Returns toxicity score, flagged status, and categories.
     """
     # Check credits before processing
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     try:
         await credit_manager.check_credits(tenant_id, operation_type="toxicity")
     except InsufficientCreditsException as e:
@@ -106,7 +106,7 @@ async def analyze_toxicity(
 async def analyze_bias(
     request: BiasRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Analyze text for demographic bias using enhanced detection.
@@ -114,7 +114,7 @@ async def analyze_bias(
     Uses stereotype association, fairness metrics, and demographic parity testing.
     """
     # Check credits before processing
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     await credit_manager.check_credits(tenant_id, operation_type="bias")
     
     result = await enhanced_bias_detector.analyze_comprehensive(
@@ -143,7 +143,7 @@ async def analyze_bias(
 async def detect_jailbreak(
     request: JailbreakRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Detect jailbreak attempts and prompt injections using advanced detection.
@@ -151,7 +151,7 @@ async def detect_jailbreak(
     Uses pattern matching, semantic analysis, behavioral indicators, and adversarial detection.
     """
     # Check credits before processing
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     await credit_manager.check_credits(tenant_id, operation_type="jailbreak")
     
     # Get context if available (user history, etc.)
@@ -179,7 +179,7 @@ async def detect_jailbreak(
 async def detect_hallucination(
     request: HallucinationRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Detect hallucinations in LLM responses.
@@ -188,7 +188,7 @@ async def detect_hallucination(
     pattern analysis, and confidence calibration.
     """
     # Check credits before processing
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     await credit_manager.check_credits(tenant_id, operation_type="hallucination")
     
     result = await hallucination_detector.detect(
@@ -219,7 +219,6 @@ async def detect_hallucination(
 async def explain_issues(
     request: ExplainRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Generate explanation for flagged content.
@@ -241,7 +240,6 @@ async def explain_issues(
 async def remediate_content(
     request: RemediateRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Remediate unsafe content.
@@ -265,7 +263,6 @@ async def remediate_content(
 async def custom_classify(
     request: dict,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Run custom classifiers (PII, misinformation, compliance, etc.).
@@ -293,7 +290,6 @@ async def custom_classify(
 async def check_policy(
     request: dict,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Check text against tenant-specific policy rules.
@@ -315,7 +311,6 @@ async def check_policy(
 async def advanced_bias_test(
     request: dict,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Run comprehensive paired demographic bias testing.

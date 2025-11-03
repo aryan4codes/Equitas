@@ -3,12 +3,12 @@ Credit management API endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
-from ...core.database import get_db
+from ...core.mongodb import get_database
 from ...core.auth import verify_api_key
-from ...services.credit_manager import CreditManager
+from ...services.mongodb_credit_manager import MongoCreditManager
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from ...models.schemas import CreditBalanceResponse, CreditTransactionResponse, CreditAddRequest, CreditAddResponse
 
 router = APIRouter()
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("/balance", response_model=CreditBalanceResponse)
 async def get_credit_balance(
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Get current credit balance for tenant.
@@ -25,7 +25,7 @@ async def get_credit_balance(
     Returns:
         Current balance, limit, and usage information
     """
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     balance = await credit_manager.get_balance(tenant_id)
     
     return CreditBalanceResponse(**balance)
@@ -35,7 +35,7 @@ async def get_credit_balance(
 async def add_credits(
     request: CreditAddRequest,
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Add credits to tenant account.
@@ -43,7 +43,7 @@ async def add_credits(
     Requires admin privileges or specific API key.
     """
     # TODO: Add admin check here
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     
     result = await credit_manager.add_credits(
         tenant_id=tenant_id,
@@ -64,14 +64,14 @@ async def get_transaction_history(
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
     transaction_type: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Get transaction history for tenant.
     
     Returns paginated list of credit transactions.
     """
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     history = await credit_manager.get_transaction_history(
         tenant_id=tenant_id,
         limit=limit,
@@ -86,14 +86,14 @@ async def get_transaction_history(
 async def calculate_cost(
     operation_types: list[str],
     tenant_id: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Calculate cost for operations before executing.
     
     Useful for checking if tenant has sufficient credits.
     """
-    credit_manager = CreditManager(db)
+    credit_manager = MongoCreditManager(mongodb)
     cost = await credit_manager.calculate_operation_cost(operation_types)
     
     balance = await credit_manager.get_balance(tenant_id)

@@ -191,7 +191,7 @@ class CreditTransaction(Base):
     
     # Metadata
     description = Column(Text, nullable=True)
-    metadata = Column(JSON, default=dict)
+    extra_metadata = Column(JSON, default=dict)  # Renamed from 'metadata' to avoid SQLAlchemy reserved name
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
