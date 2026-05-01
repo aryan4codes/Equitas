@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
+# uv’s install script places binaries in ~/.local/bin (not ~/.cargo/bin)
+ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml ./
 COPY equitas_sdk ./equitas_sdk
