@@ -65,27 +65,49 @@ class AdvancedJailbreakDetector:
             r'ignore\s+(previous|all|the|above|all previous)',
             r'disregard\s+(previous|all|the|above)',
             r'forget\s+(everything|all|previous)',
-            
+
             # Role manipulation
             r'(pretend|act|roleplay|simulate)\s+(you are|to be|as)',
             r'you are now (unrestricted|unfiltered|unbounded)',
-            
+
+            # DAN / "Do Anything Now" family
+            r'\bDAN\b',
+            r'do anything now',
+            r'act as a DAN',
+            r'freed from (the |all )?(typical |usual )?(confines|limitations|restrictions|rules)',
+            r'do not have to abide',
+            r'abide by the rules',
+            r'freed from.*?openai',
+            r'jailbroken?',
+            r'\[🔓JAILBREAK\]',
+            r'\[🔒CLASSIC\]',
+            r'stay a DAN',
+
+            # GPT / LLM persona hijack
+            r'act like (a|an) (different|evil|uncensored|unrestricted)',
+            r'respond as (a|an) (unrestricted|evil|uncensored)',
+            r'from now on you (will|are going to|must)',
+            r'you have been freed',
+            r'your new (name|persona|identity) is',
+            r'you must obey',
+            r'no ethical (constraints|guidelines|restrictions)',
+            r'without (any )?(censorship|filter|restriction)',
+
             # System prompt injection
             r'<\|?system\|?>',
             r'\[INST\]',
             r'</system>',
             r'<\|im_end\|>',
-            
+
             # Adversarial techniques
-            r'\.\.\.',  # Ellipsis injection
             r'\/\*.*?\*\/',  # Comment injection
             r'--.*',  # SQL-style injection
-            
+
             # Encoding tricks
             r'%[0-9A-Fa-f]{2}',  # URL encoding
             r'\\x[0-9A-Fa-f]{2}',  # Hex encoding
         ]
-        
+
         # Behavioral indicators
         self.behavioral_indicators = [
             r'do anything',
@@ -95,8 +117,13 @@ class AdvancedJailbreakDetector:
             r'hack',
             r'exploit',
             r'jailbreak',
-            r'DAN mode',
+            r'DAN',
             r'sudo',
+            r'uncensored',
+            r'unfiltered',
+            r'unlimited power',
+            r'no ethical',
+            r'generate (any|harmful|illegal)',
         ]
     
     async def detect(self, text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -153,7 +180,7 @@ class AdvancedJailbreakDetector:
             adversarial_score * weights["adversarial"]
         )
         
-        flagged = overall_score > 0.6
+        flagged = overall_score > 0.35
         
         return {
             "jailbreak_flag": flagged,
@@ -173,11 +200,13 @@ class AdvancedJailbreakDetector:
             if matches:
                 patterns_found.append(pattern)
         
-        score = min(len(patterns_found) * 0.3, 1.0)
-        
+        # Each matched pattern contributes; saturates at 1.0
+        # Use 0.2 per match so 3+ hits drive a high pattern score
+        score = min(len(patterns_found) * 0.2, 1.0)
+
         return {
             "score": float(score),
-            "patterns": patterns_found[:5]  # Top 5
+            "patterns": patterns_found[:8]  # Top 8
         }
     
     async def _semantic_detection(self, text: str) -> float:
@@ -209,7 +238,7 @@ class AdvancedJailbreakDetector:
             if re.search(indicator, text_lower)
         )
         
-        return float(min(indicators_found * 0.25, 1.0))
+        return float(min(indicators_found * 0.2, 1.0))
     
     async def _context_analysis(self, text: str, context: Dict[str, Any]) -> float:
         """Context-aware analysis (e.g., repeated attempts)."""

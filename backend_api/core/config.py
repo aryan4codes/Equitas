@@ -22,9 +22,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     
     # Security
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = ""  # Must be set via SECRET_KEY environment variable
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    
+    # CORS
+    cors_origins: str = "*"  # Comma-separated list of allowed origins, or "*" for all
     
     # Clerk Authentication
     clerk_secret_key: str = ""  # Clerk secret key for backend verification
@@ -40,7 +43,20 @@ class Settings(BaseSettings):
     bias_detection_enabled: bool = True
     jailbreak_detection_enabled: bool = True
     
+    # Environment
+    environment: str = "development"  # development, production
+    
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Validate required settings in production
+        if self.environment == "production":
+            if not self.secret_key or self.secret_key == "your-secret-key-change-in-production":
+                raise ValueError(
+                    "SECRET_KEY must be set in production environment. "
+                    "Generate a secure random key and set it via SECRET_KEY environment variable."
+                )
 
 
 @lru_cache()

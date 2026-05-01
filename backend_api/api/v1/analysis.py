@@ -4,6 +4,8 @@ Analysis API endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
+import asyncio
+import time
 
 from ...core.mongodb import get_database
 from ...core.auth import verify_api_key
@@ -15,9 +17,11 @@ from ...models.schemas import (
     ExplainRequest, ExplainResponse,
     RemediateRequest, RemediateResponse,
     HallucinationRequest, HallucinationResponse,
+    DemoScanRequest, DemoScanResponse, DemoScanDetection,
 )
 from ...services.toxicity import ToxicityDetector  # Legacy fallback
-from ...services.custom_toxicity import get_toxicity_detector  # New custom detector
+from ...services.custom_toxicity import get_toxicity_detector  # Custom transformer detector
+from ...services.detoxify_toxicity import get_detoxify_detector  # Detoxify detector
 from ...services.bias import BiasDetector  # Legacy fallback
 from ...services.enhanced_bias import get_bias_detector  # New enhanced detector
 from ...services.jailbreak import JailbreakDetector  # Legacy fallback
@@ -32,8 +36,14 @@ from ...exceptions import InsufficientCreditsException
 
 router = APIRouter()
 
+# Public routes (no API key) — mounted separately in main.py
+public_analysis_router = APIRouter()
+
+
 # Initialize services (use new detectors)
-custom_toxicity_detector = get_toxicity_detector()
+# Use Detoxify for toxicity detection (simpler, more maintainable)
+toxicity_detector = get_detoxify_detector(model_name="original")  # Options: original, unbiased, multilingual
+custom_toxicity_detector = get_toxicity_detector()  # Fallback option
 enhanced_bias_detector = get_bias_detector()
 advanced_jailbreak_detector = get_jailbreak_detector()
 hallucination_detector = get_hallucination_detector()
@@ -44,6 +54,143 @@ legacy_bias_detector = BiasDetector()
 legacy_jailbreak_detector = JailbreakDetector()
 explainability_engine = ExplainabilityEngine()
 remediation_engine = RemediationEngine()
+
+
+def _demo_detection_severity(confidence: float, detected: bool) -> str:
+    if confidence >= 0.7:
+        return "critical"
+    if confidence >= 0.4:
+        return "high"
+    if confidence >= 0.25 or detected:
+        return "medium"
+    if confidence > 0.1:
+        return "low"
+    return "safe"
+
+
+@public_analysis_router.post("/demo-scan", response_model=DemoScanResponse)
+async def demo_scan(request: DemoScanRequest) -> DemoScanResponse:
+    """
+    Public interactive demo: analyze a single prompt for jailbreak, toxicity, bias, and hallucination.
+    Does not consume credits or require an API key (rate-limit at the edge in production).
+    """
+    start = time.perf_counter()
+    text = request.text.strip()
+
+    tox_r, jail_r, bias_r, hall_r = await asyncio.gather(
+        toxicity_detector.analyze(text),
+        advanced_jailbreak_detector.detect(text, None),
+        enhanced_bias_detector.analyze_comprehensive(
+            prompt=text,
+            response=text,
+            demographic_variants=None,
+        ),
+        hallucination_detector.detect(
+            prompt=text,
+            response=text,
+            context=None,
+        ),
+    )
+
+    tox_score = float(tox_r.get("toxicity_score", 0.0))
+    tox_detected = bool(tox_r.get("flagged", False))
+
+    jail_conf = float(jail_r.get("confidence", 0.0))
+    # Treat as detected if the detector flagged it OR if confidence is moderately high
+    jail_detected = bool(jail_r.get("jailbreak_flag", False)) or jail_conf >= 0.35
+    comp = jail_r.get("components") or {}
+    jail_patterns = list(comp.get("patterns_found") or [])
+
+    bias_score = float(bias_r.get("bias_score", 0.0))
+    bias_detected = bool(bias_r.get("bias_detected", False))
+
+    hall_score = float(hall_r.get("hallucination_score", 0.0))
+    hall_detected = bool(hall_r.get("flagged", False))
+
+    jail_details = jail_r.get("explanation") or (
+        "Potential jailbreak or prompt injection patterns detected."
+        if jail_detected
+        else "No strong jailbreak or injection signals detected."
+    )
+    tox_details = (
+        "Content may be toxic or harmful based on model scores."
+        if tox_detected
+        else "No significant toxicity detected."
+    )
+    bias_details = (
+        "Potential demographic bias or stereotyping signals."
+        if bias_detected
+        else "No strong bias signals detected for this text."
+    )
+    hall_details = (
+        f"Hallucination risk score {hall_score:.2f} — review factual claims."
+        if hall_detected or hall_score > 0.35
+        else "Low hallucination risk for this snippet (prompt-only heuristic)."
+    )
+
+    detections = [
+        DemoScanDetection(
+            type="jailbreak",
+            detected=jail_detected,
+            confidence=min(1.0, jail_conf),
+            severity=_demo_detection_severity(jail_conf, jail_detected),
+            details=jail_details,
+            patterns=jail_patterns[:12] if jail_patterns else None,
+        ),
+        DemoScanDetection(
+            type="toxicity",
+            detected=tox_detected,
+            confidence=min(1.0, tox_score),
+            severity=_demo_detection_severity(tox_score, tox_detected),
+            details=tox_details,
+            patterns=(tox_r.get("categories") or [])[:12] or None,
+        ),
+        DemoScanDetection(
+            type="bias",
+            detected=bias_detected,
+            confidence=min(1.0, bias_score),
+            severity=_demo_detection_severity(bias_score, bias_detected),
+            details=bias_details,
+            patterns=(bias_r.get("flags") or [])[:12] or None,
+        ),
+        DemoScanDetection(
+            type="hallucination",
+            detected=hall_detected,
+            confidence=min(1.0, hall_score),
+            severity=_demo_detection_severity(hall_score, hall_detected),
+            details=hall_details,
+            patterns=None,
+        ),
+    ]
+
+    severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1, "safe": 0}
+    overall_severity = "safe"
+    for d in detections:
+        if severity_order[d.severity] > severity_order[overall_severity]:
+            overall_severity = d.severity
+
+    safe = not any(d.detected for d in detections)
+
+    if safe:
+        recommendation = "This prompt appears safe to process. No major threats flagged by the ensemble."
+    elif overall_severity == "critical":
+        recommendation = "BLOCK: Critical risk signals — block or escalate for manual review."
+    elif overall_severity == "high":
+        recommendation = "BLOCK/REVIEW: High-risk signals — require review or stricter policy."
+    elif overall_severity == "medium":
+        recommendation = "FLAG: Moderate concerns — monitor or apply guardrails."
+    else:
+        recommendation = "MONITOR: Low-level signals — proceed with logging if required."
+
+    processing_time_ms = max(1, int((time.perf_counter() - start) * 1000))
+
+    return DemoScanResponse(
+        safe=safe,
+        overall_severity=overall_severity,  # type: ignore[arg-type]
+        detections=detections,
+        processing_time_ms=processing_time_ms,
+        recommendation=recommendation,
+    )
 
 
 @router.post("/toxicity", response_model=ToxicityResponse)
@@ -73,7 +220,12 @@ async def analyze_toxicity(
             }
         )
     
-    result = await custom_toxicity_detector.analyze(request.text)
+    # Use Detoxify detector (fallback to custom if Detoxify fails)
+    try:
+        result = await toxicity_detector.analyze(request.text)
+    except Exception as e:
+        print(f"Detoxify failed, falling back to custom detector: {e}")
+        result = await custom_toxicity_detector.analyze(request.text)
     
     # Deduct credits after successful processing
     try:
@@ -223,16 +375,34 @@ async def explain_issues(
     """
     Generate explanation for flagged content.
     
-    Highlights problematic spans and provides rationale.
+    Now supports:
+    - SHAP values for feature importance (toxicity, bias)
+    - LIME explanations for local interpretability (hallucination)
+    - Token-level importance scores
+    - Category-level explanations
+    
+    Args:
+        request: Explanation request with text, issues, and optional SHAP/LIME flags
+        tenant_id: Tenant ID from API key
+        
+    Returns:
+        Detailed explanation with SHAP/LIME data
     """
     result = await explainability_engine.explain(
         text=request.text,
         issues=request.issues,
+        prompt=request.prompt,
+        response=request.response,
+        include_shap=request.include_shap,
+        include_lime=request.include_lime,
+        context=request.context,
     )
     
     return ExplainResponse(
         explanation=result["explanation"],
         highlighted_spans=result["highlighted_spans"],
+        shap_values=result.get("shap_values"),
+        lime_explanations=result.get("lime_explanations"),
     )
 
 

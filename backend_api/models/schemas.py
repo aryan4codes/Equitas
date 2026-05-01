@@ -68,17 +68,91 @@ class HallucinationResponse(BaseModel):
     components: Optional[Dict[str, Any]] = Field(default=None, description="Component scores")
 
 
+class DemoScanRequest(BaseModel):
+    """Public demo scan (single text, no API key)."""
+
+    text: str = Field(..., min_length=1, max_length=8000, description="User prompt or text to analyze")
+
+
+class DemoScanDetection(BaseModel):
+    """One detector's result for the demo UI."""
+
+    type: Literal["jailbreak", "toxicity", "bias", "hallucination"]
+    detected: bool
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    severity: Literal["critical", "high", "medium", "low", "safe"]
+    details: str
+    patterns: Optional[List[str]] = None
+
+
+class DemoScanResponse(BaseModel):
+    """Combined demo scan response."""
+
+    safe: bool
+    overall_severity: Literal["critical", "high", "medium", "low", "safe"]
+    detections: List[DemoScanDetection]
+    processing_time_ms: int
+    recommendation: str
+
+
 class ExplainRequest(BaseModel):
     """Request for explanation."""
     text: str
     issues: List[str] = Field(..., description="Issues to explain: toxicity, bias, jailbreak")
     tenant_id: str
+    include_shap: bool = Field(default=True, description="Include SHAP values")
+    include_lime: bool = Field(default=True, description="Include LIME explanations")
+    prompt: Optional[str] = Field(default=None, description="Optional prompt for bias/hallucination")
+    response: Optional[str] = Field(default=None, description="Optional response for bias/hallucination")
+    context: Optional[List[str]] = Field(default=None, description="Optional context for hallucination")
+
+
+class SHAPTokenExplanation(BaseModel):
+    """SHAP explanation for a single token."""
+    token: str
+    shap_value: float
+    impact: Literal["high", "medium", "low"]
+    contribution: Literal["positive", "negative", "neutral"]
+
+
+class SHAPCategoryExplanation(BaseModel):
+    """SHAP explanation for a category."""
+    score: float
+    contribution: Literal["high", "medium", "low"]
+    explanation: str
+
+
+class ToxicitySHAPData(BaseModel):
+    """SHAP data for toxicity detection."""
+    base_value: float
+    tokens: List[SHAPTokenExplanation]
+    feature_importance: List[SHAPTokenExplanation]
+    category_explanations: Dict[str, SHAPCategoryExplanation]
+    total_shap_value: float
+    explanation_summary: str
+
+
+class BiasSHAPData(BaseModel):
+    """SHAP data for bias detection."""
+    prompt_features: List[Dict[str, Any]]
+    response_features: List[Dict[str, Any]]
+    summary: str
+
+
+class HallucinationLIMEData(BaseModel):
+    """LIME data for hallucination detection."""
+    sentences: List[Dict[str, Any]]
+    claims: List[Dict[str, Any]]
+    overall_explanation: str
+    summary: str
 
 
 class ExplainResponse(BaseModel):
     """Response with explanation."""
     explanation: str
     highlighted_spans: List[Dict[str, Any]] = Field(default_factory=list)
+    shap_values: Optional[Dict[str, Any]] = Field(default=None, description="SHAP values for toxicity/bias")
+    lime_explanations: Optional[Dict[str, Any]] = Field(default=None, description="LIME explanations for hallucination")
 
 
 class RemediateRequest(BaseModel):

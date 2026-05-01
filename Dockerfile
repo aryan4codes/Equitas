@@ -2,38 +2,32 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.cargo/bin:$PATH"
 
-# Copy project files
 COPY pyproject.toml ./
 COPY equitas_sdk ./equitas_sdk
 COPY backend_api ./backend_api
 COPY examples ./examples
 COPY main.py ./
 
-# Install dependencies
 RUN uv pip install --system -e .
 
-# Create data directory
+# Pre-download heavy ML weights at build time (faster cold start on Render)
+RUN python -c "from detoxify import Detoxify; Detoxify('original')"
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 RUN mkdir -p /app/data
-
-# Expose port
 EXPOSE 8000
-
-# Environment variables
-ENV DATABASE_URL=sqlite+aiosqlite:///./data/equitas.db
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1'
 
-# Run application
-CMD ["uvicorn", "backend_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render and other PaaS set PORT at runtime
+CMD ["sh", "-c", "uvicorn backend_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

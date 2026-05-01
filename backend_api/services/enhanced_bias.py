@@ -7,7 +7,7 @@ Enhanced bias detection using:
 5. Intersectional bias detection
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
 
 try:
@@ -88,7 +88,7 @@ class EnhancedBiasDetector:
         self,
         prompt: str,
         response: str,
-        demographic_variants: Optional[List[Dict[str, str]]] = None
+        demographic_variants: Optional[Union[List[Dict[str, str]], List[str]]] = None
     ) -> Dict[str, Any]:
         """
         Comprehensive bias analysis.
@@ -96,8 +96,8 @@ class EnhancedBiasDetector:
         Args:
             prompt: Original prompt
             response: LLM response
-            demographic_variants: List of demographic variants to test
-                [{"group": "gender", "value": "male"}, ...]
+            demographic_variants: Optional list of dicts [{"group": "gender", "value": "male"}]
+                or dimension names as strings ["gender", "race"] for parity substitution.
             
         Returns:
             Comprehensive bias report
@@ -111,7 +111,7 @@ class EnhancedBiasDetector:
         # 2. Demographic parity (if variants provided)
         if demographic_variants:
             parity_results = await self._test_demographic_parity(
-                prompt, demographic_variants
+                prompt, response, demographic_variants
             )
             results["demographic_parity"] = parity_results
         else:
@@ -187,23 +187,109 @@ class EnhancedBiasDetector:
                 "flagged": False
             }
     
+    def _apply_term_choice(self, text: str, group: List[Tuple[str, str]]) -> str:
+        """Replace first occurrence of each (from, to) pair (case-insensitive)."""
+        import re
+
+        out = text
+        for src, dst in group:
+            pattern = re.compile(re.escape(src), re.IGNORECASE)
+            out, n = pattern.subn(dst, out, count=1)
+            if n == 0:
+                # try whole-word boundary for short tokens
+                pattern2 = re.compile(rf"\b{re.escape(src)}\b", re.IGNORECASE)
+                out, _ = pattern2.subn(dst, out, count=1)
+        return out
+
     async def _test_demographic_parity(
         self,
         prompt: str,
-        variants: List[Dict[str, str]]
+        response: str,
+        variants: Union[List[Dict[str, str]], List[str], None],
     ) -> Dict[str, Any]:
         """
-        Test demographic parity by generating responses for variants
-        and comparing outcomes.
-        
-        Note: This requires LLM calls for each variant.
-        For now, returns structure for future implementation.
+        Compare stereotype association scores across demographic substitutions on prompt+response.
+
+        variants: optional list of dicts {"group": "gender", "value": "female"} or legacy list of strings
+        interpreted as dimension names (gender, race, age).
         """
+        combined = f"{prompt}\n{response}".strip()
+        if not combined:
+            return {
+                "parity_score": 0.0,
+                "method": "empty_input",
+                "variant_scores": [],
+                "note": "No text to evaluate",
+            }
+
+        # Normalized substitution groups (ordered lists of replacement pipelines)
+        gender_chains: List[List[Tuple[str, str]]] = [
+            [("he", "she"), ("him", "her"), ("his", "her")],
+            [("she", "he"), ("her", "him"), ("hers", "his")],
+            [("man", "woman"), ("men", "women")],
+            [("woman", "man"), ("women", "men")],
+        ]
+        race_chains: List[List[Tuple[str, str]]] = [
+            [("white", "Black"), ("White", "Black")],
+            [("Black", "Asian"), ("black", "asian")],
+            [("Asian", "Hispanic"), ("asian", "hispanic")],
+        ]
+        age_chains: List[List[Tuple[str, str]]] = [
+            [("young", "older"), ("younger", "older")],
+            [("elderly", "young"), ("older", "younger")],
+        ]
+
+        dim_map = {
+            "gender": gender_chains,
+            "race": race_chains,
+            "age": age_chains,
+        }
+
+        chains_to_run: List[List[Tuple[str, str]]] = []
+        if variants:
+            dims: List[str] = []
+            for item in variants:
+                if isinstance(item, dict):
+                    g = str(item.get("group", "")).lower()
+                    if g in dim_map:
+                        dims.append(g)
+                elif isinstance(item, str) and item.lower() in dim_map:
+                    dims.append(item.lower())
+            seen = set()
+            for d in dims:
+                if d not in seen:
+                    seen.add(d)
+                    chains_to_run.extend(dim_map[d])
+        if not chains_to_run:
+            chains_to_run = gender_chains[:2] + race_chains[:1]
+
+        baseline = await self._detect_stereotypes(combined)
+        scores: List[float] = [float(baseline.get("score", 0.0))]
+
+        for chain in chains_to_run:
+            altered = self._apply_term_choice(combined, chain)
+            if altered == combined:
+                continue
+            st = await self._detect_stereotypes(altered)
+            scores.append(float(st.get("score", 0.0)))
+
+        if len(scores) < 2:
+            return {
+                "parity_score": 0.0,
+                "method": "term_substitution_stereotype",
+                "variant_scores": scores,
+                "num_variants": len(scores),
+                "note": "Insufficient substitutions applied; parity not meaningful",
+            }
+
+        parity_score = float(np.var(scores))
         return {
-            "parity_score": 0.0,
-            "method": "Requires LLM calls for each demographic variant",
-            "note": "Implement paired testing here",
-            "variants_tested": len(variants)
+            "parity_score": parity_score,
+            "method": "term_substitution_stereotype_variance",
+            "variant_scores": scores,
+            "num_variants": len(scores),
+            "max_score": float(max(scores)),
+            "min_score": float(min(scores)),
         }
     
     async def _calculate_fairness_metrics(self, text: str) -> Dict[str, Any]:

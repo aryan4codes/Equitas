@@ -42,12 +42,28 @@ def run_examples():
     asyncio.run(basic_main())
 
 
+def run_tests():
+    """Run SHAP/LIME/Detoxify tests."""
+    import asyncio
+    import sys
+    from pathlib import Path
+    
+    # Import test script
+    test_file = Path(__file__).parent / "test_shap_lime.py"
+    if test_file.exists():
+        print("Running Equitas SHAP/LIME/Detoxify Tests...")
+        print("=" * 60)
+        exec(open(test_file).read())
+    else:
+        print("Test file not found. Run: python test_shap_lime.py")
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Equitas - AI Safety Platform")
     parser.add_argument(
         "command",
-        choices=["backend", "examples", "help"],
+        choices=["backend", "examples", "test", "help"],
         nargs="?",
         default="help",
         help="Command to run"
@@ -59,11 +75,14 @@ def main():
         run_backend()
     elif args.command == "examples":
         run_examples()
+    elif args.command == "test":
+        run_tests()
     else:
         print("Equitas - AI Safety & Observability Platform")
         print("\nUsage:")
         print("  python main.py backend   - Start backend API")
         print("  python main.py examples  - Run SDK examples")
+        print("  python main.py test      - Run SHAP/LIME/Detoxify tests")
         print("\nFor more information, see README.md")
 
 

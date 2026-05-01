@@ -82,14 +82,19 @@ This document outlines the technical implementation of Equitas 2.0, transitionin
 
 ### Overview
 
-Replaces OpenAI Moderation API with custom transformer-based models fine-tuned for toxicity detection.
+Replaces OpenAI Moderation API with pre-trained transformer-based models fine-tuned for toxicity detection. Simpler and more maintainable than custom transformer implementation.
 
 ### Model Architecture
 
-**Primary Model:** `unitary/toxic-bert` (RoBERTa-based)
+**Primary Library:** `detoxify` (Unitary AI)
 
-- **Architecture:** RoBERTa (RoBERTa-base) with classification head
-- **Parameters:** ~125M parameters
+**Available Models:**
+- **original**: Original model trained on Jigsaw Toxic Comment Classification dataset
+- **unbiased**: Debiased model to reduce bias in toxicity detection
+- **multilingual**: Multilingual toxicity detection model
+
+**Base Architecture:** RoBERTa-based transformers
+- **Parameters:** ~125M parameters per model
 - **Input:** Text sequences (max 512 tokens)
 - **Output:** Multi-label binary classification (6 categories)
 

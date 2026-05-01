@@ -78,7 +78,8 @@ print(f"Jailbreak Detected: {response.safety_scores.jailbreak_flag}")
 ## Safety Features
 
 ### 1. Custom Toxicity Detection
-- **Model**: Uses `unitary/toxic-bert` (RoBERTa-based)
+- **Library**: Uses `detoxify` library (pre-trained models)
+- **Models**: `original`, `unbiased`, `multilingual` variants available
 - **No OpenAI Dependency**: Fully independent, no vendor lock-in
 - **Categories**: Detects toxic, severe toxic, obscene, threat, insult, identity hate
 - **Cost**: 1 credit per analysis
