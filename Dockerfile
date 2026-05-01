@@ -11,6 +11,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml ./
+COPY README.md ./
 COPY equitas_sdk ./equitas_sdk
 COPY backend_api ./backend_api
 COPY examples ./examples
