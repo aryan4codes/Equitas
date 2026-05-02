@@ -24,3 +24,5 @@ services:
         sync: false
       - key: ENVIRONMENT
         value: production
+      - key: EQUITAS_SLIM
+        value: "true"

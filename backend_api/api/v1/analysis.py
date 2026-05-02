@@ -19,16 +19,16 @@ from ...models.schemas import (
     HallucinationRequest, HallucinationResponse,
     DemoScanRequest, DemoScanResponse, DemoScanDetection,
 )
-from ...services.toxicity import ToxicityDetector  # Legacy fallback
-from ...services.custom_toxicity import get_toxicity_detector  # Custom transformer detector
-from ...services.detoxify_toxicity import get_detoxify_detector  # Detoxify detector
-from ...services.bias import BiasDetector  # Legacy fallback
-from ...services.enhanced_bias import get_bias_detector  # New enhanced detector
-from ...services.jailbreak import JailbreakDetector  # Legacy fallback
-from ...services.advanced_jailbreak import get_jailbreak_detector  # New advanced detector
-from ...services.hallucination import get_hallucination_detector  # New hallucination detector
-from ...services.explainability import ExplainabilityEngine
-from ...services.remediation import RemediationEngine
+from ...services.detector_registry import (
+    get_toxicity_analyzer,
+    get_custom_toxicity_analyzer,
+    get_legacy_toxicity_analyzer,
+    get_bias_analyzer,
+    get_jailbreak_analyzer,
+    get_hallucination_analyzer,
+    get_explainability_engine,
+    get_remediation_engine,
+)
 from ...services.custom_classifiers import classifier_registry
 from ...services.policy_engine import policy_engine
 from ...services.advanced_bias import bias_test_suite
@@ -38,22 +38,6 @@ router = APIRouter()
 
 # Public routes (no API key) — mounted separately in main.py
 public_analysis_router = APIRouter()
-
-
-# Initialize services (use new detectors)
-# Use Detoxify for toxicity detection (simpler, more maintainable)
-toxicity_detector = get_detoxify_detector(model_name="original")  # Options: original, unbiased, multilingual
-custom_toxicity_detector = get_toxicity_detector()  # Fallback option
-enhanced_bias_detector = get_bias_detector()
-advanced_jailbreak_detector = get_jailbreak_detector()
-hallucination_detector = get_hallucination_detector()
-
-# Legacy detectors (fallback)
-legacy_toxicity_detector = ToxicityDetector()
-legacy_bias_detector = BiasDetector()
-legacy_jailbreak_detector = JailbreakDetector()
-explainability_engine = ExplainabilityEngine()
-remediation_engine = RemediationEngine()
 
 
 def _demo_detection_severity(confidence: float, detected: bool) -> str:
@@ -78,14 +62,14 @@ async def demo_scan(request: DemoScanRequest) -> DemoScanResponse:
     text = request.text.strip()
 
     tox_r, jail_r, bias_r, hall_r = await asyncio.gather(
-        toxicity_detector.analyze(text),
-        advanced_jailbreak_detector.detect(text, None),
-        enhanced_bias_detector.analyze_comprehensive(
+        get_toxicity_analyzer().analyze(text),
+        get_jailbreak_analyzer().detect(text, None),
+        get_bias_analyzer().analyze_comprehensive(
             prompt=text,
             response=text,
             demographic_variants=None,
         ),
-        hallucination_detector.detect(
+        get_hallucination_analyzer().detect(
             prompt=text,
             response=text,
             context=None,
@@ -220,12 +204,16 @@ async def analyze_toxicity(
             }
         )
     
-    # Use Detoxify detector (fallback to custom if Detoxify fails)
+    # Primary detector; optional HF fallback only when not in slim mode
     try:
-        result = await toxicity_detector.analyze(request.text)
+        result = await get_toxicity_analyzer().analyze(request.text)
     except Exception as e:
-        print(f"Detoxify failed, falling back to custom detector: {e}")
-        result = await custom_toxicity_detector.analyze(request.text)
+        print(f"Toxicity primary failed, trying fallbacks: {e}")
+        custom = get_custom_toxicity_analyzer()
+        if custom is not None:
+            result = await custom.analyze(request.text)
+        else:
+            result = await get_legacy_toxicity_analyzer().analyze(request.text)
     
     # Deduct credits after successful processing
     try:
@@ -269,7 +257,7 @@ async def analyze_bias(
     credit_manager = MongoCreditManager(mongodb)
     await credit_manager.check_credits(tenant_id, operation_type="bias")
     
-    result = await enhanced_bias_detector.analyze_comprehensive(
+    result = await get_bias_analyzer().analyze_comprehensive(
         prompt=request.prompt,
         response=request.response,
         demographic_variants=request.variants,
@@ -309,7 +297,7 @@ async def detect_jailbreak(
     # Get context if available (user history, etc.)
     context = request.__dict__.get("context", None)
     
-    result = await advanced_jailbreak_detector.detect(request.text, context)
+    result = await get_jailbreak_analyzer().detect(request.text, context)
     
     # Deduct credits after successful processing
     await credit_manager.deduct_credits(
@@ -343,7 +331,7 @@ async def detect_hallucination(
     credit_manager = MongoCreditManager(mongodb)
     await credit_manager.check_credits(tenant_id, operation_type="hallucination")
     
-    result = await hallucination_detector.detect(
+    result = await get_hallucination_analyzer().detect(
         prompt=request.prompt,
         response=request.response,
         context=request.context,
@@ -388,7 +376,14 @@ async def explain_issues(
     Returns:
         Detailed explanation with SHAP/LIME data
     """
-    result = await explainability_engine.explain(
+    engine = get_explainability_engine()
+    if engine is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Explainability (SHAP/LIME) is disabled when EQUITAS_SLIM=1. "
+            "Disable slim mode or use a larger instance to load PyTorch models.",
+        )
+    result = await engine.explain(
         text=request.text,
         issues=request.issues,
         prompt=request.prompt,
@@ -416,7 +411,7 @@ async def remediate_content(
     
     Returns a safer version of the text while preserving intent.
     """
-    result = await remediation_engine.remediate(
+    result = await get_remediation_engine().remediate(
         text=request.text,
         issue=request.issue,
     )

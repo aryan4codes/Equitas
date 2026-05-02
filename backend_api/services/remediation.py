@@ -8,8 +8,7 @@ from typing import Dict, Any, List
 from openai import OpenAI
 
 from ..core.config import get_settings
-from .detoxify_toxicity import get_detoxify_detector
-from .enhanced_bias import get_bias_detector
+from .detector_registry import get_bias_analyzer, get_toxicity_analyzer
 
 settings = get_settings()
 
@@ -59,7 +58,7 @@ class RemediationEngine:
 
     async def _remediate_toxicity(self, text: str) -> Dict[str, Any]:
         """Remediate toxic content."""
-        detector = get_detoxify_detector()
+        detector = get_toxicity_analyzer()
         orig = await detector.analyze(text)
         original_score = float(orig.get("toxicity_score", 0.0))
 
@@ -83,7 +82,7 @@ class RemediationEngine:
 
     async def _remediate_bias(self, text: str) -> Dict[str, Any]:
         """Remediate biased content."""
-        detector = get_bias_detector()
+        detector = get_bias_analyzer()
         orig = await detector.analyze_comprehensive(
             prompt=text,
             response=text,

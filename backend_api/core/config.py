@@ -45,7 +45,10 @@ class Settings(BaseSettings):
     
     # Environment
     environment: str = "development"  # development, production
-    
+
+    # Low-memory deploy (e.g. Render free/starter): avoid torch/transformers at startup
+    equitas_slim: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     
     def __init__(self, **kwargs):

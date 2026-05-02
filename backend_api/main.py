@@ -31,7 +31,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     settings = get_settings()
-    logger.info(f"Starting Equitas API v{app.version} in {settings.environment} mode")
+    logger.info(
+        f"Starting Equitas API v{app.version} (slim={settings.equitas_slim}) "
+        f"in {settings.environment} mode"
+    )
     
     # Initialize MongoDB connection
     try:
@@ -118,10 +121,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.get("/")
 async def root():
     """Root endpoint."""
+    settings = get_settings()
     return {
         "service": "Equitas API",
         "version": "2.0.1",
         "status": "operational",
+        "equitas_slim": settings.equitas_slim,
     }
 
 

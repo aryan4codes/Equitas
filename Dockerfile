@@ -2,12 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Default for Render 512MB: no torch models loaded at startup (see EQUITAS_SLIM)
+ARG EQUITAS_SLIM=true
+ENV EQUITAS_SLIM=${EQUITAS_SLIM}
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV TOKENIZERS_PARALLELISM=false
+
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-# uv’s install script places binaries in ~/.local/bin (not ~/.cargo/bin)
 ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml ./
@@ -19,17 +25,20 @@ COPY main.py ./
 
 RUN uv pip install --system -e .
 
-# Pre-download heavy ML weights at build time (faster cold start on Render)
-RUN python -c "from detoxify import Detoxify; Detoxify('original')"
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Pre-download ML weights only for full (non-slim) images — avoids huge layers and build RAM when slim
+RUN if [ "$EQUITAS_SLIM" != "true" ]; then \
+      python -c "from detoxify import Detoxify; Detoxify('original')" && \
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"; \
+    else \
+      echo "Skipping model warm-up (EQUITAS_SLIM=true)"; \
+    fi
 
 RUN mkdir -p /app/data
 EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1'
 
-# Render and other PaaS set PORT at runtime
 CMD ["sh", "-c", "uvicorn backend_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
