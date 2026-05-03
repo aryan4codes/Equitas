@@ -12,7 +12,7 @@ services:
       pip install uv &&
       uv pip install --system -e .
     # gunicorn with uvicorn workers — production-grade ASGI serving
-    startCommand: gunicorn backend_api.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120 --log-level info
+    startCommand: python -m gunicorn backend_api.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120 --log-level info
     envVars:
       - key: MONGODB_URL
         sync: false
