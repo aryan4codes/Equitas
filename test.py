@@ -1,9 +1,9 @@
 import httpx
 import asyncio
 
-EQUITAS_API_KEY = "eq_EoeIc3A79z-pVAIwcjvG0qUgXK0olW4wJpKR4wo8aIk"
-TENANT_ID       = "tenant_user_34y"  # From your dashboard
-API_BASE        = "http://localhost:8000"
+EQUITAS_API_KEY = "eq_api_key"
+TENANT_ID       = "tenant_id"  # From your dashboard
+API_BASE        = "http://equitas.onrender.com"
 
 async def main():
     async with httpx.AsyncClient(
