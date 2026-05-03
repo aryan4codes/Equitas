@@ -4,6 +4,20 @@
 
 Equitas is a comprehensive AI safety platform that wraps around OpenAI (and other LLM) APIs to provide real-time toxicity detection, bias checking, hallucination detection, jailbreak prevention, and compliance monitoring. Built for enterprises who need to ensure their AI applications are safe, unbiased, and compliant.
 
+## Preview
+
+### Overview
+
+<img src="./outputs/summary.png" alt="Equitas summary" width="920" />
+
+### Outputs
+
+<img src="./outputs/outputs.png" alt="Equitas dashboard / outputs view" width="920" />
+
+### Architecture
+
+<img src="./outputs/arch.png" alt="Equitas architecture overview" width="920" />
+
 ## Key Features
 
 - **Multi-Layer Safety Detection** - Toxicity, bias, hallucination, and jailbreak detection
