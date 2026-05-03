@@ -2,11 +2,17 @@
 services:
   - type: web
     name: equitas-api
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    runtime: python
+    pythonVersion: "3.13"
     plan: starter
+    region: oregon
     healthCheckPath: /health
+    # Install uv, then use it to install all project deps from pyproject.toml
+    buildCommand: |
+      pip install uv &&
+      uv pip install --system -e .
+    # gunicorn with uvicorn workers — production-grade ASGI serving
+    startCommand: gunicorn backend_api.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120 --log-level info
     envVars:
       - key: MONGODB_URL
         sync: false
@@ -26,3 +32,11 @@ services:
         value: production
       - key: EQUITAS_SLIM
         value: "true"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
+      - key: TOKENIZERS_PARALLELISM
+        value: "false"
