@@ -160,6 +160,7 @@ class RemediateRequest(BaseModel):
     text: str = Field(..., description="Text to remediate")
     issue: str = Field(..., description="Issue type: toxicity, bias")
     tenant_id: str
+    remediation_model: str = Field(default="gpt-4.1-nano", description="Model to use for the rewrite")
 
 
 class RemediateResponse(BaseModel):

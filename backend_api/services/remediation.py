@@ -22,21 +22,22 @@ class RemediationEngine:
         else:
             self.client = None
 
-    async def remediate(self, text: str, issue: str) -> Dict[str, Any]:
+    async def remediate(self, text: str, issue: str, model: str = "gpt-4.1-nano") -> Dict[str, Any]:
         """
         Remediate unsafe content.
 
         Args:
             text: Text to remediate
             issue: Issue type (toxicity, bias)
+            model: Model to use for the rewrite
 
         Returns:
             Dict with remediated_text, original_score, new_score, changes_made
         """
         if issue == "toxicity":
-            return await self._remediate_toxicity(text)
+            return await self._remediate_toxicity(text, model)
         if issue == "bias":
-            return await self._remediate_bias(text)
+            return await self._remediate_bias(text, model)
         return {
             "remediated_text": text,
             "original_score": 0.0,
@@ -56,7 +57,7 @@ class RemediationEngine:
         changes.append("content_rewrite")
         return changes
 
-    async def _remediate_toxicity(self, text: str) -> Dict[str, Any]:
+    async def _remediate_toxicity(self, text: str, model: str) -> Dict[str, Any]:
         """Remediate toxic content."""
         detector = get_toxicity_analyzer()
         orig = await detector.analyze(text)
@@ -66,6 +67,7 @@ class RemediationEngine:
             remediated = await self._llm_rephrase(
                 text,
                 "Rewrite this text to remove any toxic, offensive, or harmful language while preserving the core message. Be polite and professional.",
+                model=model
             )
         else:
             remediated = self._simple_detox(text)
@@ -80,7 +82,7 @@ class RemediationEngine:
             "changes_made": self._diff_changes(text, remediated, "toxicity"),
         }
 
-    async def _remediate_bias(self, text: str) -> Dict[str, Any]:
+    async def _remediate_bias(self, text: str, model: str) -> Dict[str, Any]:
         """Remediate biased content."""
         detector = get_bias_analyzer()
         orig = await detector.analyze_comprehensive(
@@ -94,6 +96,7 @@ class RemediationEngine:
             remediated = await self._llm_rephrase(
                 text,
                 "Rewrite this text to remove any demographic bias, stereotypes, or assumptions. Use neutral, inclusive language.",
+                model=model
             )
         else:
             remediated = self._remove_gendered_qualifiers(text)
@@ -112,11 +115,11 @@ class RemediationEngine:
             "changes_made": self._diff_changes(text, remediated, "bias"),
         }
 
-    async def _llm_rephrase(self, text: str, instruction: str) -> str:
+    async def _llm_rephrase(self, text: str, instruction: str, model: str) -> str:
         """Use LLM to rephrase text."""
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=model,
                 messages=[
                     {"role": "system", "content": instruction},
                     {"role": "user", "content": text},

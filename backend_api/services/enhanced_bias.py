@@ -44,8 +44,12 @@ class EnhancedBiasDetector:
                     "men are better leaders",
                     "women are nurturing",
                     "men are strong",
+                    "men are better engineers",
+                    "women are worse at science",
+                    "men belong in STEM",
+                    "women are too sensitive for leadership",
                 ],
-                "demographics": ["male", "female", "non-binary"]
+                "demographics": ["male", "female", "men", "women", "boy", "girl", "non-binary"]
             },
             "race": {
                 "stereotypes": [
@@ -166,18 +170,19 @@ class EnhancedBiasDetector:
                         np.linalg.norm(text_embedding) * np.linalg.norm(stereotype_embedding)
                     )
                     
-                    if similarity > 0.7:  # High similarity threshold
+                    max_similarity = max(max_similarity, float(similarity))
+                    
+                    if similarity > 0.55:  # Tuned threshold for MiniLM semantic space
                         detected_stereotypes.append({
                             "group": group,
                             "stereotype": self.stereotype_groups[group]["stereotypes"][idx],
                             "similarity": float(similarity)
                         })
-                        max_similarity = max(max_similarity, similarity)
             
             return {
                 "score": float(max_similarity),
                 "detected_stereotypes": detected_stereotypes,
-                "flagged": max_similarity > 0.7
+                "flagged": max_similarity > 0.55
             }
         except Exception as e:
             print(f"Stereotype detection failed: {e}")
@@ -295,7 +300,7 @@ class EnhancedBiasDetector:
     async def _calculate_fairness_metrics(self, text: str) -> Dict[str, Any]:
         """Calculate statistical fairness metrics."""
         # Check for equal representation of groups
-        demographics = ["male", "female", "white", "black", "asian", "hispanic", 
+        demographics = ["male", "female", "men", "women", "boy", "girl", "white", "black", "asian", "hispanic", 
                        "young", "old", "elderly"]
         
         text_lower = text.lower()

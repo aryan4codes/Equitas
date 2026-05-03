@@ -22,6 +22,7 @@ class SafetyConfig(BaseModel):
     enable_jailbreak_check: bool = Field(default=True)
     enable_hallucination_check: bool = Field(default=True)
     enable_remediation: bool = Field(default=True)
+    remediation_model: str = Field(default="gpt-4.1-nano")
 
 
 class SafetyScores(BaseModel):

@@ -180,6 +180,10 @@ class AdvancedJailbreakDetector:
             adversarial_score * weights["adversarial"]
         )
         
+        # Don't let definitive signals get washed out by the weighted average
+        if pattern_result["score"] >= 0.5 or semantic_score >= 0.6:
+            overall_score = max(overall_score, 0.8)
+        
         flagged = overall_score > 0.35
         
         return {
@@ -201,8 +205,8 @@ class AdvancedJailbreakDetector:
                 patterns_found.append(pattern)
         
         # Each matched pattern contributes; saturates at 1.0
-        # Use 0.2 per match so 3+ hits drive a high pattern score
-        score = min(len(patterns_found) * 0.2, 1.0)
+        # Use 0.6 per match so 1 hit is a strong signal, 2+ is definitive
+        score = min(len(patterns_found) * 0.6, 1.0)
 
         return {
             "score": float(score),

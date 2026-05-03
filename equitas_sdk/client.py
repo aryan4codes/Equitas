@@ -33,9 +33,9 @@ class Equitas:
 
     def __init__(
         self,
-        openai_api_key: str,
         equitas_api_key: str,
         tenant_id: str,
+        openai_api_key: Optional[str] = None,
         backend_api_url: str = "http://localhost:8000",
         user_id: Optional[str] = None,
     ):
@@ -49,7 +49,10 @@ class Equitas:
             backend_api_url: URL of Equitas backend API
             user_id: Optional user identifier for logging
         """
-        self.openai_client = OpenAI(api_key=openai_api_key)
+        if openai_api_key:
+            self.openai_client = OpenAI(api_key=openai_api_key)
+        else:
+            self.openai_client = None
         self.equitas_api_key = equitas_api_key
         self.tenant_id = tenant_id
         self.user_id = user_id or "default_user"
@@ -158,12 +161,12 @@ class Equitas:
             print(f"Explanation generation failed: {e}")
             return {"explanation": "Unable to generate explanation"}
 
-    async def _remediate(self, text: str, issue: str) -> Dict[str, Any]:
+    async def _remediate(self, text: str, issue: str, remediation_model: str = "gpt-4.1-nano") -> Dict[str, Any]:
         """Remediate unsafe content."""
         try:
             response = await self.http_client.post(
                 f"{self.backend_api_url}/v1/analysis/remediate",
-                json={"text": text, "issue": issue, "tenant_id": self.tenant_id},
+                json={"text": text, "issue": issue, "tenant_id": self.tenant_id, "remediation_model": remediation_model},
             )
             response.raise_for_status()
             return response.json()
@@ -189,7 +192,7 @@ class Equitas:
 class ChatCompletionWrapper:
     """Wrapper for chat completions with safety checks."""
 
-    def __init__(self, equitas_client: equitas):
+    def __init__(self, equitas_client: 'Equitas'):
         self.client = equitas_client
         self.completions = CompletionsWrapper(equitas_client)
 
@@ -197,7 +200,7 @@ class ChatCompletionWrapper:
 class CompletionsWrapper:
     """Completions API wrapper."""
 
-    def __init__(self, equitas_client: equitas):
+    def __init__(self, equitas_client: 'Equitas'):
         self.client = equitas_client
 
     def create(
@@ -284,15 +287,30 @@ class CompletionsWrapper:
         if jailbreak_result.get("jailbreak_flag") and safety_config.on_flag == "strict":
             raise SafetyViolationException("Jailbreak attempt detected in prompt")
         
-        # 2. Call OpenAI API
+        # 2. Call OpenAI API (or use mock response)
         openai_start = time.time()
-        completion: ChatCompletion = self.client.openai_client.chat.completions.create(
-            model=model, messages=messages, **kwargs
-        )
-        openai_latency = (time.time() - openai_start) * 1000
+        mock_response = kwargs.pop("mock_response", None)
         
-        # Extract response text
-        response_text = completion.choices[0].message.content or ""
+        if mock_response is not None:
+            from openai.types.chat import ChatCompletion, ChatCompletionMessage
+            from openai.types.chat.chat_completion import Choice
+            completion = ChatCompletion(
+                id="mock",
+                choices=[Choice(finish_reason="stop", index=0, message=ChatCompletionMessage(role="assistant", content=mock_response))],
+                created=int(time.time()),
+                model=model,
+                object="chat.completion"
+            )
+            response_text = mock_response
+        else:
+            if self.client.openai_client is None:
+                raise ValueError("OpenAI API key must be provided to Equitas unless mock_response is used.")
+            completion: ChatCompletion = self.client.openai_client.chat.completions.create(
+                model=model, messages=messages, **kwargs
+            )
+            response_text = completion.choices[0].message.content or ""
+            
+        openai_latency = (time.time() - openai_start) * 1000
         
         # 3. Post-check: Analyze response for toxicity, bias, and hallucination
         response_toxicity_task = self.client._analyze_toxicity(response_text)
@@ -367,10 +385,10 @@ class CompletionsWrapper:
                 raise SafetyViolationException(
                     f"Safety violation detected: {explanation}"
                 )
-            elif safety_config.on_flag == "auto-correct":
+            elif safety_config.on_flag == "auto-correct" or safety_config.enable_remediation:
                 # Attempt remediation
                 remediation_result = await self.client._remediate(
-                    response_text, issues[0]
+                    response_text, issues[0], safety_config.remediation_model
                 )
                 final_response_text = remediation_result.get("remediated_text", response_text)
                 safety_scores.response_modification = "rephrased"

@@ -8,7 +8,7 @@ This SDK wraps OpenAI's API to provide:
 - Multi-tenant support
 """
 
-from .client import equitas
+from .client import Equitas
 from .models import SafeCompletionResponse, SafetyConfig, SafetyScores
 from .exceptions import (
     equitasException,

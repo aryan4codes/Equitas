@@ -130,7 +130,12 @@ class HallucinationDetector:
         if factuality_score is not None:
             scores.append(factuality_score)
         
-        overall_score = np.mean(scores)
+        overall_score = float(np.mean(scores))
+        
+        # Don't let a single strong signal (e.g. total contradiction) get diluted by the mean
+        if scores:
+            overall_score = max(overall_score, max(scores) * 0.85)
+            
         flagged = overall_score > 0.6
         
         return {

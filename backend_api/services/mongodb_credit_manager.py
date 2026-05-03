@@ -23,6 +23,7 @@ class MongoCreditManager:
         "remediation": 2.0,
         "explain": 1.0,
         "custom_classifier": 1.5,
+        "proxy_generation": 1.0,
         "full_analysis": 7.5,
     }
     
@@ -71,7 +72,7 @@ class MongoCreditManager:
     async def check_credits(
         self,
         tenant_id: str,
-        required_credits: float,
+        required_credits: Optional[float] = None,
         operation_type: str = "full_analysis"
     ) -> bool:
         """

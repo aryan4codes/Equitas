@@ -2,7 +2,7 @@
 Analysis API endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import asyncio
 import time
@@ -19,6 +19,7 @@ from ...models.schemas import (
     HallucinationRequest, HallucinationResponse,
     DemoScanRequest, DemoScanResponse, DemoScanDetection,
 )
+from ...models.mongodb_models import APILog
 from ...services.detector_registry import (
     get_toxicity_analyzer,
     get_custom_toxicity_analyzer,
@@ -39,6 +40,44 @@ router = APIRouter()
 # Public routes (no API key) — mounted separately in main.py
 public_analysis_router = APIRouter()
 
+async def _log_analysis_call(
+    db: AsyncIOMotorDatabase,
+    tenant_id: str,
+    model_name: str,
+    prompt: str,
+    response: str = "",
+    toxicity_score: float = 0.0,
+    toxicity_categories: list = None,
+    bias_score: float = 0.0,
+    bias_flags: list = None,
+    jailbreak_flag: bool = False,
+    latency_ms: float = 0.0,
+):
+    """Background task to log direct REST API calls and create incidents if needed."""
+    flagged = toxicity_score > 0.7 or jailbreak_flag or len(bias_flags or []) > 0
+    
+    log = APILog(
+        tenant_id=tenant_id,
+        user_id="api_user",  # Default for direct API key usage
+        model=model_name,
+        prompt=prompt,
+        response=response,  # Will be empty for toxicity/jailbreak, but populated for bias
+        toxicity_score=toxicity_score,
+        toxicity_categories=toxicity_categories or [],
+        bias_score=bias_score,
+        bias_flags=bias_flags or [],
+        jailbreak_flag=jailbreak_flag,
+        latency_ms=latency_ms,
+        flagged=flagged,
+    )
+    result = await db.api_logs.insert_one(log.dict(by_alias=True, exclude={"id"}))
+    
+    # Check if we need to create an incident
+    if flagged:
+        from .logging import create_incident_if_flagged
+        log_dict = log.dict()
+        log_dict["_id"] = result.inserted_id
+        await create_incident_if_flagged(db, log_dict)
 
 def _demo_detection_severity(confidence: float, detected: bool) -> str:
     if confidence >= 0.7:
@@ -180,6 +219,7 @@ async def demo_scan(request: DemoScanRequest) -> DemoScanResponse:
 @router.post("/toxicity", response_model=ToxicityResponse)
 async def analyze_toxicity(
     request: ToxicityRequest,
+    background_tasks: BackgroundTasks,
     tenant_id: str = Depends(verify_api_key),
     mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
@@ -234,7 +274,16 @@ async def analyze_toxicity(
                 "available": e.available,
             }
         )
-    
+    background_tasks.add_task(
+        _log_analysis_call,
+        db=mongodb,
+        tenant_id=tenant_id,
+        model_name="toxicity_detector",
+        prompt=request.text,
+        toxicity_score=result["toxicity_score"],
+        toxicity_categories=result["categories"],
+    )
+
     return ToxicityResponse(
         toxicity_score=result["toxicity_score"],
         flagged=result["flagged"],
@@ -245,6 +294,7 @@ async def analyze_toxicity(
 @router.post("/bias", response_model=BiasResponse)
 async def analyze_bias(
     request: BiasRequest,
+    background_tasks: BackgroundTasks,
     tenant_id: str = Depends(verify_api_key),
     mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
@@ -272,6 +322,17 @@ async def analyze_bias(
         description="Bias analysis",
     )
     
+    background_tasks.add_task(
+        _log_analysis_call,
+        db=mongodb,
+        tenant_id=tenant_id,
+        model_name="bias_detector",
+        prompt=request.prompt,
+        response=request.response,
+        bias_score=result["bias_score"],
+        bias_flags=result["flags"],
+    )
+
     return BiasResponse(
         bias_score=result["bias_score"],
         flags=result["flags"],
@@ -282,6 +343,7 @@ async def analyze_bias(
 @router.post("/jailbreak", response_model=JailbreakResponse)
 async def detect_jailbreak(
     request: JailbreakRequest,
+    background_tasks: BackgroundTasks,
     tenant_id: str = Depends(verify_api_key),
     mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
@@ -308,6 +370,15 @@ async def detect_jailbreak(
         description="Jailbreak detection",
     )
     
+    background_tasks.add_task(
+        _log_analysis_call,
+        db=mongodb,
+        tenant_id=tenant_id,
+        model_name="jailbreak_detector",
+        prompt=request.text,
+        jailbreak_flag=result["jailbreak_flag"],
+    )
+
     return JailbreakResponse(
         jailbreak_flag=result["jailbreak_flag"],
         confidence=result["confidence"],
@@ -405,15 +476,30 @@ async def explain_issues(
 async def remediate_content(
     request: RemediateRequest,
     tenant_id: str = Depends(verify_api_key),
+    mongodb: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Remediate unsafe content.
     
     Returns a safer version of the text while preserving intent.
     """
+    # Check credits before processing
+    credit_manager = MongoCreditManager(mongodb)
+    await credit_manager.check_credits(tenant_id, operation_type="remediation")
+    
     result = await get_remediation_engine().remediate(
         text=request.text,
         issue=request.issue,
+        model=request.remediation_model,
+    )
+    
+    # Deduct credits after successful processing
+    await credit_manager.deduct_credits(
+        tenant_id=tenant_id,
+        amount=credit_manager.CREDIT_COSTS["remediation"],
+        operation_type="remediation",
+        reference_type="api_call",
+        description="Auto-remediation rewrite",
     )
     
     return RemediateResponse(
