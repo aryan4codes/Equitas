@@ -175,7 +175,7 @@ class Equitas:
         """Asynchronously log API call to Guardian."""
         try:
             await self.http_client.post(
-                f"{self.guardian_base_url}/v1/log",
+                f"{self.backend_api_url}/v1/log",
                 json=log_data,
             )
         except Exception as e:

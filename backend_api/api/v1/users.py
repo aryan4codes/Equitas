@@ -56,19 +56,36 @@ async def register_user(
     
     result = await db.users.insert_one(user.dict(by_alias=True, exclude={"id"}))
     
-    # Create default tenant config
+    # Create default tenant config with 100 starter credits
     from ...models.mongodb_models import TenantConfig
     default_config = TenantConfig(
         tenant_id=tenant_id,
-        credit_balance=0.0,
+        credit_balance=100.0,  # 100 starter credits for new users
         credit_enabled=True,
     )
     await db.tenant_configs.insert_one(default_config.dict(by_alias=True, exclude={"id"}))
+    
+    # Record the starter credit transaction for audit trail
+    from ...models.mongodb_models import CreditTransaction
+    starter_transaction = CreditTransaction(
+        tenant_id=tenant_id,
+        transaction_type="add",
+        amount=100.0,
+        balance_before=0.0,
+        balance_after=100.0,
+        reference_type="signup_bonus",
+        description="Welcome bonus: 100 starter credits",
+        created_by="system",
+    )
+    await db.credit_transactions.insert_one(
+        starter_transaction.dict(by_alias=True, exclude={"id"})
+    )
     
     return {
         "success": True,
         "user_id": str(result.inserted_id),
         "tenant_id": tenant_id,
+        "starter_credits": 100.0,
     }
 
 
@@ -396,3 +413,34 @@ async def get_log_detail(
         "explanation": log.get("explanation"),
         "created_at": log["created_at"].isoformat() if isinstance(log["created_at"], datetime) else log["created_at"],
     }
+
+
+@router.get("/transactions")
+async def get_user_transactions(
+    clerk_user_id: str = Depends(get_current_user_id),
+    limit: int = Query(100, le=1000),
+    offset: int = Query(0, ge=0),
+    transaction_type: Optional[str] = Query(None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Get credit transaction history for current user's tenant.
+    
+    Returns paginated list of credit transactions (adds, deductions, bonuses).
+    """
+    user = await db.users.find_one({"clerk_user_id": clerk_user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    tenant_id = user["tenant_id"]
+    
+    from ...services.mongodb_credit_manager import MongoCreditManager
+    credit_manager = MongoCreditManager(db)
+    history = await credit_manager.get_transaction_history(
+        tenant_id=tenant_id,
+        limit=limit,
+        offset=offset,
+        transaction_type=transaction_type,
+    )
+    
+    return history
