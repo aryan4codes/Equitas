@@ -34,11 +34,10 @@ RUN if [ "$EQUITAS_SLIM" != "true" ]; then \
     fi
 
 RUN mkdir -p /app/data
-EXPOSE 8000
+EXPOSE 10000
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1'
+    CMD sh -c 'curl -fsS "http://127.0.0.1:${PORT:-10000}/health" || exit 1'
 
-CMD ["sh", "-c", "uvicorn backend_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn backend_api.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
