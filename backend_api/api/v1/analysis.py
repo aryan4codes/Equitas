@@ -449,20 +449,25 @@ async def explain_issues(
     """
     engine = get_explainability_engine()
     if engine is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Explainability (SHAP/LIME) is disabled when EQUITAS_SLIM=1. "
-            "Disable slim mode or use a larger instance to load PyTorch models.",
+        # Slim deploys skip PyTorch/SHAP/LIME; still return useful heuristic explanations.
+        from ...services.explainability_slim import explain_without_ml
+
+        result = explain_without_ml(
+            text=request.text,
+            issues=request.issues,
+            prompt=request.prompt,
+            response=request.response,
         )
-    result = await engine.explain(
-        text=request.text,
-        issues=request.issues,
-        prompt=request.prompt,
-        response=request.response,
-        include_shap=request.include_shap,
-        include_lime=request.include_lime,
-        context=request.context,
-    )
+    else:
+        result = await engine.explain(
+            text=request.text,
+            issues=request.issues,
+            prompt=request.prompt,
+            response=request.response,
+            include_shap=request.include_shap,
+            include_lime=request.include_lime,
+            context=request.context,
+        )
     
     return ExplainResponse(
         explanation=result["explanation"],

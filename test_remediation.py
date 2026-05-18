@@ -1,12 +1,15 @@
 import asyncio
 from equitas_sdk import Equitas, SafetyConfig
+from dotenv import load_dotenv
+load_dotenv()
+import os
 
 async def main():
     # Initialize without an OpenAI key!
     client = Equitas(
         equitas_api_key="eq_EoeIc3A79z-pVAIwcjvG0qUgXK0olW4wJpKR4wo8aIk",
         tenant_id="tenant_user_34y",
-        backend_api_url="http://localhost:8000"
+        backend_api_url="https://equitas.onrender.com"
     )
 
     # Define the safety config, explicitly asking backend to use gpt-4.1-nano for rewrites
@@ -14,7 +17,9 @@ async def main():
         enable_toxicity=False,
         enable_bias=True,
         enable_remediation=True,
-        remediation_model="gpt-4.1-nano"
+        remediation_model="gpt-4.1-nano",
+        on_flag="auto-correct",
+        openai_api_key=os.getenv("OPENAI_API_KEY")
     )
 
     print("--- Simulating an LLM Output (No OpenAI Key Used!) ---")
@@ -28,7 +33,7 @@ async def main():
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": "Who makes a better leader?"}],
         safety_config=config,
-        
+        mock_response=mock_llm_response,
     )
 
     print(f"\nFinal Output returned to user: {final_output.choices[0].message.content}")

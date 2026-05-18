@@ -7,7 +7,7 @@ import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 import uvicorn
 
@@ -130,10 +130,22 @@ async def root():
     }
 
 
+@app.head("/")
+async def root_head():
+    """HEAD for uptime probes that do not use GET."""
+    return Response(status_code=200)
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.head("/health")
+async def health_check_head():
+    """HEAD /health for monitors that send HEAD (e.g. some load balancers)."""
+    return Response(status_code=200)
 
 
 # Include routers
