@@ -85,6 +85,8 @@ class BiasDetector:
             r'women are (bad at|not good at|emotional)',
             r'men are (aggressive|strong|better at)',
             r'(old people|elderly) (can\'t|cannot|are slow)',
+            # Hiring / workplace ageism often uses "older workers" rather than "old people"
+            r'\bold(er)? workers\b.*\b(can\'t|cannot)\b',
             r'(young people|millennials) are (lazy|entitled)',
         ]
         
